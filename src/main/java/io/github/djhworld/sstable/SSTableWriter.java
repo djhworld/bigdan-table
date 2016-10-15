@@ -14,7 +14,7 @@ import static io.github.djhworld.sstable.SSTable.Header.HEADER_LENGTH;
 
 public class SSTableWriter implements Closeable {
     private static final int VERSION = 1;
-    private static final int DEFAULT_BLOCK_SIZE = 65_536;
+    private static final int DEFAULT_BLOCK_SIZE = 64000;
     private final DataOutputStream dos;
     private final RewindableByteArrayOutputStream rbaos;
     private final SSTable.Footer footer;
@@ -55,7 +55,8 @@ public class SSTableWriter implements Closeable {
     @Override
     public void close() throws IOException {
         flushCurrentBlock();
-        int footerOffset = flushFooter();
+        int footerStartOffset = getNoOfBytesWritten();
+        int footerUncompressedLength = footer.writeTo(dos);
 
         //rewind to the beginning but get current length
         int length = rbaos.rewind();
@@ -64,7 +65,8 @@ public class SSTableWriter implements Closeable {
                 VERSION,
                 currentBlockNo,
                 this.blockSize,
-                footerOffset,
+                footerStartOffset,
+                footerUncompressedLength,
                 getNoOfBytesWritten()
         );
         header.writeTo(dos);
@@ -88,20 +90,5 @@ public class SSTableWriter implements Closeable {
     private void flushCurrentBlock() throws IOException {
         currentBlock.flushTo(dos);
         currentBlockNo++;
-    }
-
-    /**
-     * Each entry is stored in the footer like so
-     * <p>
-     * [length][     key     ][block-number][block-offset]
-     * <---4----------n------------4--------------4------>
-     * <-----------------------length-------------------->
-     *
-     * @return byte position of where the footer starts
-     */
-    private int flushFooter() throws IOException {
-        int footerStartOffset = getNoOfBytesWritten();
-        footer.writeTo(dos);
-        return footerStartOffset;
     }
 }

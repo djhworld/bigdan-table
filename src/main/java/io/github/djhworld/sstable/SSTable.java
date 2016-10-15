@@ -13,10 +13,13 @@ import org.slf4j.Logger;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import static com.google.common.cache.CacheBuilder.newBuilder;
 import static com.google.common.collect.TreeBasedTable.create;
@@ -93,9 +96,9 @@ public class SSTable {
     }
 
     private Footer newFooter() throws IOException {
-        int length = this.header.fileLength - this.header.footerOffset;
-        int offset = this.header.fileLength - length;
-        return new Footer(this.source, offset, length);
+        int compressedLength = this.header.fileLength - this.header.footerOffset;
+        int offset = this.header.fileLength - compressedLength;
+        return new Footer(this.source, offset, compressedLength, this.header.footerUncompressedLength);
     }
 
     private LoadingCache<Integer, Block> newBlockCache(int blockCacheSize) {
@@ -140,7 +143,6 @@ public class SSTable {
                 byte[] block = new byte[this.blockSize()];
                 inputStream.readFully(block);
                 this.blockCache.put(blockNo, new ReadOnlyBlock(block));
-                block = null;
             }
         } catch (IOException e) {
             throw new SSTableException("Error attempting to load all blocks from cache", e);
@@ -148,10 +150,11 @@ public class SSTable {
     }
 
     static class Header {
-        static final int HEADER_LENGTH = 24;
+        static final int HEADER_LENGTH = 28;
         final int magic;
         final int version;
         final int footerOffset;
+        final int footerUncompressedLength;
         final int fileLength;
         final int noOfBlocks;
         final int blockSize;
@@ -168,16 +171,18 @@ public class SSTable {
                 this.noOfBlocks = dis.readInt();
                 this.blockSize = dis.readInt();
                 this.footerOffset = dis.readInt();
+                this.footerUncompressedLength = dis.readInt();
                 this.fileLength = dis.readInt();
             }
         }
 
-        Header(int version, int noOfBlocks, int blockSize, int footerOffset, int fileLength) {
+        Header(int version, int noOfBlocks, int blockSize, int footerOffset, int footerUncompressedLength, int fileLength) {
             this.magic = MAGIC;
             this.version = version;
             this.noOfBlocks = noOfBlocks;
             this.blockSize = blockSize;
             this.footerOffset = footerOffset;
+            this.footerUncompressedLength = footerUncompressedLength;
             this.fileLength = fileLength;
         }
 
@@ -192,6 +197,7 @@ public class SSTable {
                 dos.writeInt(this.noOfBlocks);
                 dos.writeInt(this.blockSize);
                 dos.writeInt(this.footerOffset);
+                dos.writeInt(this.footerUncompressedLength);
                 dos.writeInt(this.fileLength);
             } catch (IOException e) {
                 throw new SSTableException("Error writing header", e);
@@ -208,13 +214,23 @@ public class SSTable {
             this.keysToBlocksIndex = create();
         }
 
-        private Footer(Source source, int footerOffset, int length) throws IOException, SSTableException {
+        /**
+         * Each entry is stored in the footer like so
+         *
+         * <p>
+         * [length][     key     ][block-number][block-offset]
+         * <---4----------n------------4--------------4------>
+         * <-----------------------length-------------------->
+         *
+         * @return byte position of where the footer starts
+         */
+        private Footer(Source source, int footerOffset, int compressedLength, int uncompressedLength) throws IOException, SSTableException {
             this();
-            try (DataInputStream inputStream = new DataInputStream(source.getRange(footerOffset, length))) {
+            try (DataInputStream inputStream = new DataInputStream(new GZIPInputStream(source.getRange(footerOffset, compressedLength)))) {
                 LOGGER.info("Initialising SSTable footer at offset " + footerOffset);
                 int currentPos = 0;
 
-                while (currentPos < length) {
+                while (currentPos < uncompressedLength) {
                     int bytesRead = readBlockIndexEntry(inputStream);
                     currentPos += bytesRead;
                 }
@@ -226,23 +242,27 @@ public class SSTable {
         }
 
         /**
-         * @param dos
          * @throws SSTableException
          */
-        public void writeTo(DataOutputStream dos) {
-            this.keysToBlocksIndex.cellSet().forEach((cell) -> {
-                try {
-                    byte[] keyBytes = Joiner.on(ENTRY_ROW_KEY_SEPARATOR).join(cell.getRowKey(), cell.getColumnKey()).getBytes();
-                    int blockIndexEntryLength = keyBytes.length + INDEX_ENTRY_METADATA_BYTES;
+        public int writeTo(OutputStream out) {
+            try (DataOutputStream compressedOut = new DataOutputStream(new GZIPOutputStream(out))) {
+                this.keysToBlocksIndex.cellSet().forEach((cell) -> {
+                    try {
+                        byte[] keyBytes = Joiner.on(ENTRY_ROW_KEY_SEPARATOR).join(cell.getRowKey(), cell.getColumnKey()).getBytes();
+                        int blockIndexEntryLength = keyBytes.length + INDEX_ENTRY_METADATA_BYTES;
+                        compressedOut.writeInt(blockIndexEntryLength);
+                        compressedOut.write(keyBytes);
+                        compressedOut.writeInt(cell.getValue().blockNumber);
+                        compressedOut.writeInt(cell.getValue().blockOffset);
+                    } catch (IOException e) {
+                        throw new SSTableException("Error writing entry to footer", e);
+                    }
+                });
 
-                    dos.writeInt(blockIndexEntryLength);
-                    dos.write(keyBytes);
-                    dos.writeInt(cell.getValue().blockNumber);
-                    dos.writeInt(cell.getValue().blockOffset);
-                } catch (IOException e) {
-                    throw new SSTableException("Error writing to footer", e);
-                }
-            });
+                return compressedOut.size();
+            } catch (IOException e) {
+                throw new SSTableException("Error writing to footer", e);
+            }
         }
 
         private int readBlockIndexEntry(DataInputStream inputStream) throws IOException {
@@ -265,7 +285,6 @@ public class SSTable {
 
             return blockIndexEntryLength;
         }
-
 
     }
 }

@@ -57,12 +57,12 @@ public class SSTableTest {
 
     @Test
     public void shouldGetCorrectNumberOfBlocks() throws Exception {
-        assertThat(SS_TABLE.blocks(), is(2));
+        assertThat(SS_TABLE.blocks(), is(3));
     }
 
     @Test
     public void shouldGetCorrectBlockSize() throws Exception {
-        assertThat(SS_TABLE.blockSize(), is(65536));
+        assertThat(SS_TABLE.blockSize(), is(64000));
     }
 
     @Test(expected = SSTableException.class)
@@ -86,7 +86,7 @@ public class SSTableTest {
 
         AtomicInteger i = new AtomicInteger(-1);
         SS_TABLE.scan(rm -> {
-            assertThat(SS_TABLE.cachedBlocks(), is(2L));
+            assertThat(SS_TABLE.cachedBlocks(), is(35L));
             if (i.get() == -1) {
                 assertThat(rm.rowKey, is("com.amazon"));
                 assertThat(rm.columnKey, is("info:text"));
