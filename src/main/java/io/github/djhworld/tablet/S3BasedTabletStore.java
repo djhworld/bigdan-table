@@ -2,6 +2,7 @@ package io.github.djhworld.tablet;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3URI;
+import com.amazonaws.services.s3.S3ClientOptions;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import io.github.djhworld.io.S3Sink;
@@ -23,6 +24,7 @@ public class S3BasedTabletStore extends TabletStore {
     public S3BasedTabletStore(AmazonS3 amazonS3, Path root) {
         super(root);
         this.amazonS3 = amazonS3;
+        amazonS3.setS3ClientOptions(new S3ClientOptions());
     }
 
     @Override

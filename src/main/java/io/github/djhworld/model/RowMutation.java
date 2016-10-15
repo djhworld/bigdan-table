@@ -5,7 +5,6 @@ import com.google.common.base.Splitter;
 import java.util.Iterator;
 
 import static com.google.common.base.Joiner.on;
-import static io.github.djhworld.model.RowMutation.Action.valueOf;
 
 public class RowMutation {
     public static final String SEPARATOR = "|||";

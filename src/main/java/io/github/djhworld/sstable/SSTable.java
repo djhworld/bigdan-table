@@ -16,9 +16,6 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static com.google.common.cache.CacheBuilder.newBuilder;
@@ -79,7 +76,9 @@ public class SSTable {
         });
     }
 
-    public long cachedBlocks() { return blockCache.size(); }
+    public long cachedBlocks() {
+        return blockCache.size();
+    }
 
     public int blocks() {
         return header.noOfBlocks;
@@ -179,6 +178,23 @@ public class SSTable {
             this.blockSize = blockSize;
             this.footerOffset = footerOffset;
             this.fileLength = fileLength;
+        }
+
+        /**
+         * @param dos
+         * @throws SSTableException
+         */
+        public void writeTo(DataOutputStream dos) {
+            try {
+                dos.writeInt(this.magic);
+                dos.writeInt(this.version);
+                dos.writeInt(this.noOfBlocks);
+                dos.writeInt(this.blockSize);
+                dos.writeInt(this.footerOffset);
+                dos.writeInt(this.fileLength);
+            } catch (IOException e) {
+                throw new SSTableException("Error writing header", e);
+            }
         }
     }
 

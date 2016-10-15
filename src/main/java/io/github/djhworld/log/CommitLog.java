@@ -1,7 +1,7 @@
 package io.github.djhworld.log;
 
-import io.github.djhworld.model.RowMutation;
 import io.github.djhworld.log.exception.CommitLogException;
+import io.github.djhworld.model.RowMutation;
 
 import java.io.*;
 import java.nio.file.Files;

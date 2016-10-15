@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static java.nio.file.Paths.*;
+import static java.nio.file.Paths.get;
 
 public class TabletMetadataService {
 

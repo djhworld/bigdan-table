@@ -1,19 +1,14 @@
 package io.github.djhworld.tablet;
 
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.google.common.collect.TreeBasedTable;
 import io.github.djhworld.log.CommitLog;
-import io.github.djhworld.model.RowMutation;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static io.github.djhworld.model.RowMutation.*;
+import static io.github.djhworld.model.RowMutation.newAddMutation;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
@@ -32,7 +27,7 @@ public class S3BasedTabletStoreTest {
         initMocks(this);
         AmazonS3Client amazonS3 = new AmazonS3Client();
         tabletStore = new S3BasedTabletStore(amazonS3, Paths.get("djhworld", "sstables"));
-      //   tabletStore = new FileBasedTabletStore(Paths.get("/Users/danielharper/tmp/data"));
+        // tabletStore = new FileBasedTabletStore(Paths.get("/Users/danielharper/tmp/data"));
     }
 
     @Test

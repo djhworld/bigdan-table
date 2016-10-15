@@ -2,21 +2,15 @@ package io.github.djhworld.io;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.MockitoAnnotations;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.stream.Stream;
 
 import static com.google.common.io.Resources.getResource;
-import static io.github.djhworld.sstable.SSTableTest.TEST_DATA_DB;
 import static java.nio.file.Paths.get;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertThat;
 
 public class FileSourceTest {
     private Path path;
@@ -30,7 +24,7 @@ public class FileSourceTest {
 
     @Test
     public void shouldProvideFullInputStream() throws Exception {
-        try(BufferedReader reader = new BufferedReader(new InputStreamReader(fileSource.open()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fileSource.open()))) {
             reader.lines().forEach(line -> {
                 assertThat(line, is("test data"));
             });
@@ -39,7 +33,7 @@ public class FileSourceTest {
 
     @Test
     public void shouldProvideRangedInputStream() throws Exception {
-        try(BufferedReader reader = new BufferedReader(new InputStreamReader(fileSource.getRange(5, 4)))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fileSource.getRange(5, 4)))) {
             reader.lines().forEach(line -> {
                 assertThat(line, is("data"));
             });

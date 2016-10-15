@@ -1,9 +1,8 @@
 package io.github.djhworld.io;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class FileSink implements Sink {
@@ -14,9 +13,7 @@ public class FileSink implements Sink {
     }
 
     @Override
-    public void flush(ByteBuffer buffer) throws IOException {
-        try(FileChannel fileChannel = new FileOutputStream(location.toFile(), false).getChannel()) {
-            fileChannel.write(buffer);
-        }
+    public void flush(InputStream inputStream, int length) throws IOException {
+        Files.copy(inputStream, location);
     }
 }

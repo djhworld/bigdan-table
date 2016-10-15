@@ -6,7 +6,7 @@ import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
 
 public class Matchers {
-    public static  Matcher<RowMutation> rowMutationMatcher(RowMutation expected) {
+    public static Matcher<RowMutation> rowMutationMatcher(RowMutation expected) {
         return new TypeSafeMatcher<RowMutation>() {
             @Override
             protected boolean matchesSafely(RowMutation actual) {

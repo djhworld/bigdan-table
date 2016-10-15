@@ -2,7 +2,6 @@ package io.github.djhworld.sstable;
 
 import io.github.djhworld.exception.SSTableException;
 import io.github.djhworld.io.FileSource;
-import io.github.djhworld.sstable.SSTable;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -88,7 +87,7 @@ public class SSTableTest {
         AtomicInteger i = new AtomicInteger(-1);
         SS_TABLE.scan(rm -> {
             assertThat(SS_TABLE.cachedBlocks(), is(2L));
-            if(i.get() == -1) {
+            if (i.get() == -1) {
                 assertThat(rm.rowKey, is("com.amazon"));
                 assertThat(rm.columnKey, is("info:text"));
                 i.getAndIncrement();

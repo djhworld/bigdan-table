@@ -1,13 +1,12 @@
 package io.github.djhworld.sstable;
 
+import io.github.djhworld.io.RewindableByteArrayOutputStream;
 import io.github.djhworld.io.Sink;
 import io.github.djhworld.model.RowMutation;
 
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 
 import static io.github.djhworld.sstable.SSTable.Footer;
 import static io.github.djhworld.sstable.SSTable.Header;
@@ -17,7 +16,7 @@ public class SSTableWriter implements Closeable {
     private static final int VERSION = 1;
     private static final int DEFAULT_BLOCK_SIZE = 65_536;
     private final DataOutputStream dos;
-    private final ByteArrayOutputStream baos;
+    private final RewindableByteArrayOutputStream cos;
     private final SSTable.Footer footer;
     private final Sink sink;
     private final int blockSize;
@@ -32,8 +31,8 @@ public class SSTableWriter implements Closeable {
     public SSTableWriter(Sink sink, int blockSize) throws IOException {
         this.sink = sink;
         this.blockSize = blockSize;
-        this.baos = new ByteArrayOutputStream();
-        this.dos = new DataOutputStream(baos);
+        this.cos = new RewindableByteArrayOutputStream();
+        this.dos = new DataOutputStream(cos);
         this.currentBlockNo = 0;
         this.currentBlock = newBlock();
         this.footer = new Footer();
@@ -58,7 +57,9 @@ public class SSTableWriter implements Closeable {
         flushCurrentBlock();
         int footerOffset = flushFooter();
 
-        ByteBuffer buffer = ByteBuffer.wrap(baos.toByteArray());
+        //rewind to the beginning but get current length
+        int length = cos.rewind();
+
         Header header = new Header(
                 VERSION,
                 currentBlockNo,
@@ -66,16 +67,9 @@ public class SSTableWriter implements Closeable {
                 footerOffset,
                 getNoOfBytesWritten()
         );
+        header.writeTo(dos);
 
-        buffer.putInt(header.magic);
-        buffer.putInt(header.version);
-        buffer.putInt(header.noOfBlocks);
-        buffer.putInt(header.blockSize);
-        buffer.putInt(header.footerOffset);
-        buffer.putInt(header.fileLength);
-        buffer.position(0);
-
-        sink.flush(buffer);
+        sink.flush(cos.toInputStream(), length);
     }
 
     private int getNoOfBytesWritten() {

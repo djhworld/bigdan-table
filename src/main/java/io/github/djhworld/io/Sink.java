@@ -1,8 +1,8 @@
 package io.github.djhworld.io;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.io.InputStream;
 
 public interface Sink {
-    void flush(ByteBuffer buffer) throws IOException;
+    void flush(InputStream inputStream, int length) throws IOException;
 }

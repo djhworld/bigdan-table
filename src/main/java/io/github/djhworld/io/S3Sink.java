@@ -5,10 +5,8 @@ import com.amazonaws.services.s3.AmazonS3URI;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.io.InputStream;
 
 public class S3Sink implements Sink {
     private final AmazonS3 amazonS3;
@@ -20,17 +18,15 @@ public class S3Sink implements Sink {
     }
 
     @Override
-    public void flush(ByteBuffer buffer) throws IOException {
-        int contentLength = buffer.limit();
-
+    public void flush(InputStream inputStream, int length) throws IOException {
         ObjectMetadata objectMetadata = new ObjectMetadata();
-        objectMetadata.setContentLength(contentLength);
+        objectMetadata.setContentLength(length);
 
         amazonS3.putObject(
                 new PutObjectRequest(
                         s3Key.getBucket(),
                         s3Key.getKey(),
-                        new ByteBufferBackedInputStream(buffer),
+                        inputStream,
                         objectMetadata)
         );
     }
