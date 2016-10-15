@@ -13,8 +13,8 @@ import java.util.List;
 import static java.nio.file.Files.createDirectories;
 import static java.util.stream.Collectors.toList;
 
-public class FileBasedTabletStore extends TabletStore {
-    public FileBasedTabletStore(Path root) throws IOException {
+class FileBasedTabletStore extends TabletStore {
+    FileBasedTabletStore(Path root) throws IOException {
         super(root);
         createIfNotExists();
     }

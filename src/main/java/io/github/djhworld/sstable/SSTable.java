@@ -96,9 +96,14 @@ public class SSTable {
     }
 
     private Footer newFooter() throws IOException {
-        int compressedLength = this.header.fileLength - this.header.footerOffset;
-        int offset = this.header.fileLength - compressedLength;
-        return new Footer(this.source, offset, compressedLength, this.header.footerUncompressedLength);
+        int footerCompressedLength = this.header.fileLength - this.header.footerOffset;
+        int footerOffset = this.header.fileLength - footerCompressedLength;
+        return new Footer(
+                this.source,
+                footerOffset,
+                footerCompressedLength,
+                this.header.footerUncompressedLength
+        );
     }
 
     private LoadingCache<Integer, Block> newBlockCache(int blockCacheSize) {
@@ -122,7 +127,6 @@ public class SSTable {
     }
 
     private Block getBlock(int blockNo) throws IOException {
-        LOGGER.info("Loading block " + blockNo);
         int offset = HEADER_LENGTH;
 
         if (blockNo > 0)
@@ -216,7 +220,7 @@ public class SSTable {
 
         /**
          * Each entry is stored in the footer like so
-         *
+         * <p>
          * <p>
          * [length][     key     ][block-number][block-offset]
          * <---4----------n------------4--------------4------>

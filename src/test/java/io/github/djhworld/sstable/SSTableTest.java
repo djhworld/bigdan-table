@@ -86,7 +86,7 @@ public class SSTableTest {
 
         AtomicInteger i = new AtomicInteger(-1);
         SS_TABLE.scan(rm -> {
-            assertThat(SS_TABLE.cachedBlocks(), is(35L));
+            assertThat(SS_TABLE.cachedBlocks(), is(3L));
             if (i.get() == -1) {
                 assertThat(rm.rowKey, is("com.amazon"));
                 assertThat(rm.columnKey, is("info:text"));

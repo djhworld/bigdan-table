@@ -41,13 +41,17 @@ public class S3BasedTabletStoreTest {
 
         Tablet tablet = new Tablet("id", mockedTabletMetadataService);
 
-        for (int i = 0; i < 1000000; i++) {
-            tablet.apply(newAddMutation("com.amazon", String.format("%05d", i) +  "site", "data data data data dara data data data" + i));
-            //tablet.apply(newAddMutation("com.google", String.format("%05d", i) +  "page", "data data data data dara data data data" + i));
+        for (int j = 0; j < 4; j++) {
+            for (int i = 0; i < 500000; i++) {
+                tablet.apply(newAddMutation("com.amazon", String.format("%05d", i) + "site", "data data data data dara data data data" + i));
+                //tablet.apply(newAddMutation("com.google", String.format("%05d", i) +  "page", "data data data data dara data data data" + i));
+            }
+            tablet.flush();
         }
-        tablet.flush();
-        for (int j = 0; j < 1000; j++) {
-            for (int i = 0; i < 100; i++) {
+        tablet.compact();
+        when(mockedTabletMetadataService.getCurrentTabletGeneration(eq("id"))).thenReturn(2);
+        for (int j = 0; j < 2; j++) {
+            for (int i = 1000000; i < 1000100; i++) {
                 assertThat(tablet.get("com.amazon", String.format("%05d", i) + "site"), is(Optional.of("data data data data dara data data data" + i)));
              //   assertThat(tablet.get("com.google", String.format("%05d", i) + "page"), is(Optional.of("data data data data dara data data data" + i)));
             }

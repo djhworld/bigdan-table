@@ -8,18 +8,18 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
-public abstract class TabletStore {
+abstract class TabletStore {
     private final Path root;
 
     TabletStore(Path root) {
         this.root = root;
     }
 
-    protected final Path getRoot() {
+    final Path getRoot() {
         return root;
     }
 
-    protected final Path getCurrentGenerationPath(Integer currentGeneration) {
+    final Path getCurrentGenerationPath(Integer currentGeneration) {
         return getRoot().resolve(Paths.get(currentGeneration.toString()));
     }
 

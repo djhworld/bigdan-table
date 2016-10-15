@@ -16,11 +16,11 @@ import java.util.List;
 
 import static java.util.stream.Collectors.toList;
 
-public class S3BasedTabletStore extends TabletStore {
+class S3BasedTabletStore extends TabletStore {
     private static final String S3 = "s3://";
     private final AmazonS3 amazonS3;
 
-    public S3BasedTabletStore(AmazonS3 amazonS3, Path root) {
+    S3BasedTabletStore(AmazonS3 amazonS3, Path root) {
         super(root);
         this.amazonS3 = amazonS3;
     }

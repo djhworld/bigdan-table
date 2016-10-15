@@ -44,8 +44,6 @@ public class Tablet {
 
     //TODO: metadata service
     //TODO: need to store commit log somewhere more permanent
-    //TODO: need to support s3 output
-    //TODO: need to support restricting value size to 64kb
     //feed it metadata service and it requests the information it needs
     public Tablet(String tabletId, TabletMetadataService tabletMetadataService) {
         try {
@@ -76,6 +74,7 @@ public class Tablet {
                         break;
                     case DEL:
                         delete(rowMutation, true);
+                        break;
                 }
             } catch (Exception e) {
                 throw new TabletException("Caught exception attempting to apply mutation ", e);

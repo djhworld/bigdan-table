@@ -8,6 +8,20 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 
 public class ReadOnlyBlockTest {
+
+    @Test
+    public void shouldFillEntireBlockWithOneEntry() throws Exception {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        WriteableBlock writeableBlock = new WriteableBlock(16);
+        writeableBlock.put("12345678");
+        writeableBlock.flushTo(baos);
+
+        ReadOnlyBlock readOnlyBlock = new ReadOnlyBlock(baos.toByteArray());
+        assertThat(readOnlyBlock.read(0), is("12345678"));
+    }
+
+
     @Test
     public void shouldReadAllEntriesFromFullBlock() throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
