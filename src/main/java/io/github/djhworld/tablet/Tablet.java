@@ -189,6 +189,7 @@ public class Tablet {
     }
 
     private void insert(RowMutation rowMutation, boolean requiresCommit) throws IOException {
+        //TODO evaluate value length to see if it exceeds block size
         if (requiresCommit)
             commitLog.commit(rowMutation);
 

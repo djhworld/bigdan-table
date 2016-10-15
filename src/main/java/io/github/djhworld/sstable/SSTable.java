@@ -119,6 +119,7 @@ public class SSTable {
     }
 
     private Block getBlock(int blockNo) throws IOException {
+        LOGGER.info("Loading block " + blockNo);
         int offset = HEADER_LENGTH;
 
         if (blockNo > 0)

@@ -24,7 +24,6 @@ public class S3BasedTabletStore extends TabletStore {
     public S3BasedTabletStore(AmazonS3 amazonS3, Path root) {
         super(root);
         this.amazonS3 = amazonS3;
-        amazonS3.setS3ClientOptions(new S3ClientOptions());
     }
 
     @Override

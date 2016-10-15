@@ -9,21 +9,15 @@ import static java.nio.ByteBuffer.wrap;
 
 class ReadOnlyBlock implements Block {
     private final Map<Integer, String> entries;
-    private int maxOffset;
 
     ReadOnlyBlock(byte[] from) {
         this.entries = newTreeMap();
-        this.maxOffset = 0;
         loadEntries(from);
     }
 
     public String read(int offsetInBlock) {
-        checkArgument(offsetInBlock <= maxOffset, "Invalid offset requested!");
+        checkArgument(entries.containsKey(offsetInBlock), "Invalid offset requested!");
         return entries.get(offsetInBlock);
-    }
-
-    public int getMaxOffset() {
-        return maxOffset;
     }
 
     private void loadEntries(byte[] block) {
@@ -42,7 +36,6 @@ class ReadOnlyBlock implements Block {
             byte[] bytes = new byte[length - ENTRY_HEADER_BYTES];
             buffer.get(bytes);
             entries.put(position, new String(bytes));
-            maxOffset = position;
             position = buffer.position();
         }
 

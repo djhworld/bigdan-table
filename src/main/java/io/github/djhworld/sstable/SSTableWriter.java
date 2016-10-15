@@ -16,7 +16,7 @@ public class SSTableWriter implements Closeable {
     private static final int VERSION = 1;
     private static final int DEFAULT_BLOCK_SIZE = 65_536;
     private final DataOutputStream dos;
-    private final RewindableByteArrayOutputStream cos;
+    private final RewindableByteArrayOutputStream rbaos;
     private final SSTable.Footer footer;
     private final Sink sink;
     private final int blockSize;
@@ -31,8 +31,8 @@ public class SSTableWriter implements Closeable {
     public SSTableWriter(Sink sink, int blockSize) throws IOException {
         this.sink = sink;
         this.blockSize = blockSize;
-        this.cos = new RewindableByteArrayOutputStream();
-        this.dos = new DataOutputStream(cos);
+        this.rbaos = new RewindableByteArrayOutputStream();
+        this.dos = new DataOutputStream(rbaos);
         this.currentBlockNo = 0;
         this.currentBlock = newBlock();
         this.footer = new Footer();
@@ -58,7 +58,7 @@ public class SSTableWriter implements Closeable {
         int footerOffset = flushFooter();
 
         //rewind to the beginning but get current length
-        int length = cos.rewind();
+        int length = rbaos.rewind();
 
         Header header = new Header(
                 VERSION,
@@ -69,7 +69,7 @@ public class SSTableWriter implements Closeable {
         );
         header.writeTo(dos);
 
-        sink.flush(cos.toInputStream(), length);
+        sink.flush(rbaos.toInputStream(), length);
     }
 
     private int getNoOfBytesWritten() {

@@ -7,8 +7,11 @@ import org.junit.Test;
 import org.mockito.Mock;
 
 import java.nio.file.Paths;
+import java.util.Optional;
 
 import static io.github.djhworld.model.RowMutation.newAddMutation;
+import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
@@ -27,7 +30,6 @@ public class S3BasedTabletStoreTest {
         initMocks(this);
         AmazonS3Client amazonS3 = new AmazonS3Client();
         tabletStore = new S3BasedTabletStore(amazonS3, Paths.get("djhworld", "sstables"));
-        // tabletStore = new FileBasedTabletStore(Paths.get("/Users/danielharper/tmp/data"));
     }
 
     @Test
@@ -36,36 +38,19 @@ public class S3BasedTabletStoreTest {
         when(mockedTabletMetadataService.getCurrentTabletGeneration(eq("id"))).thenReturn(1);
         when(mockedTabletMetadataService.getCurrentCommitLog(eq("id"))).thenReturn(mockedCommitLog);
 
-        //TODO: looks like s3 block limit is 8,192
 
         Tablet tablet = new Tablet("id", mockedTabletMetadataService);
-        for (int i = 0; i < 33333; i++) {
-            for (int j = 0; j < 10; j++) {
-                tablet.apply(newAddMutation("com.amazon" + i, "site" + j, "data data data data dara data data data" + i));
-                tablet.apply(newAddMutation("com.amazon" + i, "page" + j, "<html><head><body>"));
-                tablet.apply(newAddMutation("com.amazon" + i, "data" + j, "yep"));
-            }
+
+        for (int i = 0; i < 1000000; i++) {
+            tablet.apply(newAddMutation("com.amazon", String.format("%05d", i) +  "site", "data data data data dara data data data" + i));
+            //tablet.apply(newAddMutation("com.google", String.format("%05d", i) +  "page", "data data data data dara data data data" + i));
         }
         tablet.flush();
-        for (int i = 0; i < 33333; i++) {
-            for (int j = 0; j < 10; j++) {
-                tablet.apply(newAddMutation("com.amazon" + i, "site" + j, "data data data data dara data data data" + i));
-                tablet.apply(newAddMutation("com.amazon" + i, "page" + j, "<html><head><body>"));
-                tablet.apply(newAddMutation("com.amazon" + i, "data" + j, "yep"));
+        for (int j = 0; j < 1000; j++) {
+            for (int i = 0; i < 100; i++) {
+                assertThat(tablet.get("com.amazon", String.format("%05d", i) + "site"), is(Optional.of("data data data data dara data data data" + i)));
+             //   assertThat(tablet.get("com.google", String.format("%05d", i) + "page"), is(Optional.of("data data data data dara data data data" + i)));
             }
         }
-        tablet.flush();
-        when(mockedTabletMetadataService.getCurrentTabletGeneration(eq("id"))).thenReturn(1).thenReturn(2);
-        tablet.compact();
-
-        for (int i = 0; i < 10_00; i++) {
-            tablet.apply(newAddMutation("com.amazon", "1site" + i, "data"));
-            tablet.apply(newAddMutation("com.amazon", "1page" + i, "<html>"));
-            tablet.apply(newAddMutation("com.amazon", "1data" + i, "yep"));
-        }
-
-        //TODO: think about range based Sources rather than reading whole input stream
-        System.out.println(tablet.get("com.amazon300", "site9"));
-
     }
 }

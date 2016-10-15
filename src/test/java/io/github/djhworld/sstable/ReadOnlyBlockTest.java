@@ -21,7 +21,6 @@ public class ReadOnlyBlockTest {
         ReadOnlyBlock readOnlyBlock = new ReadOnlyBlock(baos.toByteArray());
         assertThat(readOnlyBlock.read(0), is("1234"));
         assertThat(readOnlyBlock.read(8), is("5678"));
-        assertThat(readOnlyBlock.getMaxOffset(), is(8));
     }
 
     @Test
@@ -35,7 +34,6 @@ public class ReadOnlyBlockTest {
 
         ReadOnlyBlock readOnlyBlock = new ReadOnlyBlock(baos.toByteArray());
         assertThat(readOnlyBlock.read(0), is("1234"));
-        assertThat(readOnlyBlock.getMaxOffset(), is(0));
     }
 
     @Test
@@ -51,7 +49,6 @@ public class ReadOnlyBlockTest {
         ReadOnlyBlock readOnlyBlock = new ReadOnlyBlock(baos.toByteArray());
         assertThat(readOnlyBlock.read(0), is("123"));
         assertThat(readOnlyBlock.read(7), is("12"));
-        assertThat(readOnlyBlock.getMaxOffset(), is(7));
 
         baos = new ByteArrayOutputStream();
         writeableBlock = new WriteableBlock(16);
@@ -63,7 +60,6 @@ public class ReadOnlyBlockTest {
         readOnlyBlock = new ReadOnlyBlock(baos.toByteArray());
         assertThat(readOnlyBlock.read(0), is("1234"));
         assertThat(readOnlyBlock.read(8), is("123"));
-        assertThat(readOnlyBlock.getMaxOffset(), is(8));
     }
 
     @Test(expected = IllegalArgumentException.class)
