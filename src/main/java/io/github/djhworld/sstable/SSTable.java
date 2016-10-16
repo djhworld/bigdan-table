@@ -15,9 +15,13 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Optional;
+import java.util.SortedMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -27,6 +31,7 @@ import static io.github.djhworld.model.RowMutation.newAddMutation;
 import static io.github.djhworld.sstable.SSTable.Header.HEADER_LENGTH;
 import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
+import static java.util.regex.Pattern.*;
 import static org.slf4j.LoggerFactory.getLogger;
 
 public class SSTable {
@@ -69,6 +74,28 @@ public class SSTable {
             return empty();
 
         return ofNullable(getValueFromBlock(blockDescriptor));
+    }
+
+    public void scanRow(String rowKey, String columnFamily, String columnKeyRegex, Consumer<RowMutation> consumer) {
+        SortedMap<String, BlockDescriptor> row = this.footer.keysToBlocksIndex.row(rowKey);
+
+        if (row == null)
+            return;
+
+        boolean columnFamilyFound = false;
+        for (Map.Entry<String, BlockDescriptor> entry : row.entrySet()) {
+            if (entry.getKey().startsWith(columnFamily)) {
+                columnFamilyFound = true;
+                Matcher matcher = compile(columnFamily + ":" + columnKeyRegex).matcher(entry.getKey());
+                if (matcher.matches()) {
+                    String value = getValueFromBlock(entry.getValue());
+                    consumer.accept(newAddMutation(rowKey, entry.getKey(), value));
+                }
+            }
+
+            if (columnFamilyFound && !entry.getKey().startsWith(columnFamily))
+                break;
+        }
     }
 
     public void scan(Consumer<RowMutation> consumer) {
