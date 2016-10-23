@@ -21,7 +21,6 @@ import java.util.SortedMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -54,36 +53,36 @@ public class SSTable {
             this.footer = newFooter();
             this.blockCache = newBlockCache(this.header.noOfBlocks);
 
-            this.minKey = this.footer.keysToBlocksIndex.rowMap().firstKey();
-            this.maxKey = this.footer.keysToBlocksIndex.rowMap().lastKey();
+            this.minKey = this.footer.keysToBlockEntries.rowMap().firstKey();
+            this.maxKey = this.footer.keysToBlockEntries.rowMap().lastKey();
         } catch (Exception e) {
             throw new SSTableException("Exception caught attempting to initialise SSTable", e);
         }
     }
 
     public boolean contains(String rowName, String columnName) {
-        return this.footer.keysToBlocksIndex.contains(
+        return this.footer.keysToBlockEntries.contains(
                 rowName, columnName
         );
     }
 
     public Optional<String> get(String rowName, String columnName) {
-        BlockDescriptor blockDescriptor = this.footer.keysToBlocksIndex.get(rowName, columnName);
+        BlockEntryDescriptor blockEntryDescriptor = this.footer.keysToBlockEntries.get(rowName, columnName);
 
-        if (blockDescriptor == null)
+        if (blockEntryDescriptor == null)
             return empty();
 
-        return ofNullable(getValueFromBlock(blockDescriptor));
+        return ofNullable(getValueFromBlock(blockEntryDescriptor));
     }
 
     public void scanRow(String rowKey, String columnFamily, String columnKeyRegex, Consumer<RowMutation> consumer) {
-        SortedMap<String, BlockDescriptor> row = this.footer.keysToBlocksIndex.row(rowKey);
+        SortedMap<String, BlockEntryDescriptor> row = this.footer.keysToBlockEntries.row(rowKey);
 
         if (row == null)
             return;
 
         boolean columnFamilyFound = false;
-        for (Map.Entry<String, BlockDescriptor> entry : row.entrySet()) {
+        for (Map.Entry<String, BlockEntryDescriptor> entry : row.entrySet()) {
             if (entry.getKey().startsWith(columnFamily)) {
                 columnFamilyFound = true;
                 Matcher matcher = compile(columnFamily + ":" + columnKeyRegex).matcher(entry.getKey());
@@ -100,7 +99,7 @@ public class SSTable {
 
     public void scan(Consumer<RowMutation> consumer) {
         this.loadAllBlocksIntoCache();
-        this.footer.keysToBlocksIndex.cellSet().forEach((cell) -> {
+        this.footer.keysToBlockEntries.cellSet().forEach((cell) -> {
             String value = getValueFromBlock(cell.getValue());
             consumer.accept(newAddMutation(cell.getRowKey(), cell.getColumnKey(), value));
         });
@@ -119,7 +118,7 @@ public class SSTable {
     }
 
     public int noOfRows() {
-        return this.footer.keysToBlocksIndex.size();
+        return this.footer.keysToBlockEntries.size();
     }
 
     private Footer newFooter() throws IOException {
@@ -144,12 +143,12 @@ public class SSTable {
                         });
     }
 
-    private String getValueFromBlock(BlockDescriptor blockDescriptor) {
+    private String getValueFromBlock(BlockEntryDescriptor blockEntryDescriptor) {
         try {
-            Block block = this.blockCache.get(blockDescriptor.blockNumber);
-            return block.read(blockDescriptor.blockOffset);
+            Block block = this.blockCache.get(blockEntryDescriptor.id);
+            return block.read(blockEntryDescriptor.offset);
         } catch (ExecutionException e) {
-            throw new SSTableException("Problem reading from block " + blockDescriptor.blockNumber, e.getCause());
+            throw new SSTableException("Problem reading from block " + blockEntryDescriptor.id, e.getCause());
         }
     }
 
@@ -239,17 +238,17 @@ public class SSTable {
     static class Footer {
         private static final int INDEX_ENTRY_METADATA_BYTES = 12;
         private static final String ENTRY_ROW_KEY_SEPARATOR = "|";
-        private final TreeBasedTable<String, String, BlockDescriptor> keysToBlocksIndex;
+        private final TreeBasedTable<String, String, BlockEntryDescriptor> keysToBlockEntries;
 
         Footer() {
-            this.keysToBlocksIndex = create();
+            this.keysToBlockEntries = create();
         }
 
         /**
          * Each entry is stored in the footer like so
          * <p>
          * <p>
-         * [length][     key     ][block-number][block-offset]
+         * [length][     key     ][block-id][block-offset]
          * <---4----------n------------4--------------4------>
          * <-----------------------length-------------------->
          *
@@ -262,14 +261,14 @@ public class SSTable {
                 int currentPos = 0;
 
                 while (currentPos < uncompressedLength) {
-                    int bytesRead = readBlockIndexEntry(inputStream);
+                    int bytesRead = readBlockEntry(inputStream);
                     currentPos += bytesRead;
                 }
             }
         }
 
-        void put(String rowName, String columnName, BlockDescriptor blockDescriptor) {
-            this.keysToBlocksIndex.put(rowName, columnName, blockDescriptor);
+        void put(String rowName, String columnName, BlockEntryDescriptor blockEntryDescriptor) {
+            this.keysToBlockEntries.put(rowName, columnName, blockEntryDescriptor);
         }
 
         /**
@@ -277,14 +276,14 @@ public class SSTable {
          */
         public int writeTo(OutputStream out) {
             try (DataOutputStream compressedOut = new DataOutputStream(new GZIPOutputStream(out))) {
-                this.keysToBlocksIndex.cellSet().forEach((cell) -> {
+                this.keysToBlockEntries.cellSet().forEach((cell) -> {
                     try {
                         byte[] keyBytes = Joiner.on(ENTRY_ROW_KEY_SEPARATOR).join(cell.getRowKey(), cell.getColumnKey()).getBytes();
                         int blockIndexEntryLength = keyBytes.length + INDEX_ENTRY_METADATA_BYTES;
                         compressedOut.writeInt(blockIndexEntryLength);
                         compressedOut.write(keyBytes);
-                        compressedOut.writeInt(cell.getValue().blockNumber);
-                        compressedOut.writeInt(cell.getValue().blockOffset);
+                        compressedOut.writeInt(cell.getValue().id);
+                        compressedOut.writeInt(cell.getValue().offset);
                     } catch (IOException e) {
                         throw new SSTableException("Error writing entry to footer", e);
                     }
@@ -296,25 +295,25 @@ public class SSTable {
             }
         }
 
-        private int readBlockIndexEntry(DataInputStream inputStream) throws IOException {
-            int blockIndexEntryLength = inputStream.readInt();
+        private int readBlockEntry(DataInputStream inputStream) throws IOException {
+            int blockEntryLength = inputStream.readInt();
 
-            if (blockIndexEntryLength <= 0)
+            if (blockEntryLength <= 0)
                 throw new SSTableException("Footer is corrupt, cannot read block index entry");
 
-            byte[] keyBytes = new byte[blockIndexEntryLength - INDEX_ENTRY_METADATA_BYTES];
+            byte[] keyBytes = new byte[blockEntryLength - INDEX_ENTRY_METADATA_BYTES];
             inputStream.readFully(keyBytes);
 
-            int valueBlockNumber = inputStream.readInt();
-            int valueBlockOffset = inputStream.readInt();
+            int blockId = inputStream.readInt();
+            int blockOffset = inputStream.readInt();
 
             Iterator<String> rowKey = Splitter.on(ENTRY_ROW_KEY_SEPARATOR).split(new String(keyBytes)).iterator();
-            this.keysToBlocksIndex.put(
+            this.keysToBlockEntries.put(
                     rowKey.next(),
                     rowKey.next(),
-                    BlockDescriptor.of(valueBlockNumber, valueBlockOffset));
+                    BlockEntryDescriptor.of(blockId, blockOffset));
 
-            return blockIndexEntryLength;
+            return blockEntryLength;
         }
 
     }

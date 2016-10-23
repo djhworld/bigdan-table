@@ -49,7 +49,7 @@ public class SSTableWriter implements Closeable {
         }
 
         int blockOffset = this.currentBlock.put(rowMutation.value);
-        this.footer.put(rowMutation.rowKey, rowMutation.columnKey, BlockDescriptor.of(this.currentBlockNo, blockOffset));
+        this.footer.put(rowMutation.rowKey, rowMutation.columnKey, BlockEntryDescriptor.of(this.currentBlockNo, blockOffset));
     }
 
     @Override
