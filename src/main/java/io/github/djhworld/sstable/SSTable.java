@@ -2,45 +2,36 @@ package io.github.djhworld.sstable;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.TreeBasedTable;
 import io.github.djhworld.exception.SSTableException;
 import io.github.djhworld.io.Source;
 import io.github.djhworld.model.RowMutation;
 import org.slf4j.Logger;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Optional;
-import java.util.SortedMap;
-import java.util.concurrent.ExecutionException;
+import java.io.*;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-import static com.google.common.cache.CacheBuilder.newBuilder;
+import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.TreeBasedTable.create;
 import static io.github.djhworld.model.RowMutation.newAddMutation;
 import static io.github.djhworld.sstable.SSTable.Header.HEADER_LENGTH;
 import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
-import static java.util.regex.Pattern.*;
+import static java.util.regex.Pattern.compile;
 import static org.slf4j.LoggerFactory.getLogger;
 
 public class SSTable {
     private static final Logger LOGGER = getLogger(SSTable.class);
     private static final int MAGIC = 55748130;
 
-    private final LoadingCache<Integer, Block> blockCache;
     private final Source source;
     private final Header header;
     private final Footer footer;
+    private final Block[] blocks;
 
     public final String minKey;
     public final String maxKey;
@@ -51,8 +42,11 @@ public class SSTable {
             this.source = source;
             this.header = new Header(this.source);
             this.footer = newFooter();
-            this.blockCache = newBlockCache(this.header.noOfBlocks);
 
+            if (header.noOfBlocks != this.footer.blockDescriptors.size())
+                throw new SSTableException("Number of blocks do not match in header and footer");
+
+            this.blocks = new ReadOnlyBlock[header.noOfBlocks];
             this.minKey = this.footer.keysToBlockEntries.rowMap().firstKey();
             this.maxKey = this.footer.keysToBlockEntries.rowMap().lastKey();
         } catch (Exception e) {
@@ -98,7 +92,7 @@ public class SSTable {
     }
 
     public void scan(Consumer<RowMutation> consumer) {
-        this.loadAllBlocksIntoCache();
+        this.loadAllBlocks();
         this.footer.keysToBlockEntries.cellSet().forEach((cell) -> {
             String value = getValueFromBlock(cell.getValue());
             consumer.accept(newAddMutation(cell.getRowKey(), cell.getColumnKey(), value));
@@ -106,7 +100,12 @@ public class SSTable {
     }
 
     public long cachedBlocks() {
-        return blockCache.size();
+        int size = 0;
+        for (int i = 0; i < blocks.length; i++) {
+            if (blocks[i] != null)
+                size++;
+        }
+        return size;
     }
 
     public int blocks() {
@@ -132,47 +131,59 @@ public class SSTable {
         );
     }
 
-    private LoadingCache<Integer, Block> newBlockCache(int blockCacheSize) {
-        return newBuilder()
-                .maximumSize(blockCacheSize)
-                .build(
-                        new CacheLoader<Integer, Block>() {
-                            public Block load(Integer blockNo) throws IOException {
-                                return getBlock(blockNo);
-                            }
-                        });
-    }
-
     private String getValueFromBlock(BlockEntryDescriptor blockEntryDescriptor) {
         try {
-            Block block = this.blockCache.get(blockEntryDescriptor.id);
+            Block block = getBlock(blockEntryDescriptor.id);
             return block.read(blockEntryDescriptor.offset);
-        } catch (ExecutionException e) {
+        } catch (IOException e) {
             throw new SSTableException("Problem reading from block " + blockEntryDescriptor.id, e.getCause());
         }
     }
 
-    private Block getBlock(int blockNo) throws IOException {
-        int offset = HEADER_LENGTH;
+    private Block getBlock(int blockId) throws IOException {
+        if (blocks[blockId] == null)
+            blocks[blockId] = loadBlock(blockId);
 
-        if (blockNo > 0)
-            offset = offset + (blockNo * this.blockSize());
+        return blocks[blockId];
+    }
 
-        try (DataInputStream inputStream = new DataInputStream(source.getRange(offset, this.blockSize()))) {
+    private Block loadBlock(int blockId) throws IOException {
+        BlockDescriptor blockDescriptor = this.footer.getBlockDescriptor(blockId);
+
+        try (DataInputStream inputStream = new DataInputStream(new GZIPInputStream(source.getRange(blockDescriptor.offset, blockDescriptor.length)))) {
             byte[] block = new byte[this.blockSize()];
             inputStream.readFully(block);
             return new ReadOnlyBlock(block);
         }
     }
 
-    private void loadAllBlocksIntoCache() {
-        int totalBytesForAllBlocks = this.blockSize() * this.header.noOfBlocks;
-        LOGGER.info("Retrieving " + totalBytesForAllBlocks + " bytes of data from source to populate block cache");
-        try (DataInputStream inputStream = new DataInputStream(source.getRange(HEADER_LENGTH, totalBytesForAllBlocks))) {
-            for (int blockNo = 0; blockNo < this.header.noOfBlocks; blockNo++) {
-                byte[] block = new byte[this.blockSize()];
-                inputStream.readFully(block);
-                this.blockCache.put(blockNo, new ReadOnlyBlock(block));
+    private void loadAllBlocks() {
+        if (cachedBlocks() == header.noOfBlocks)
+            return;
+
+        int totalBytesForAllBlocks = this.footer.computeLengthOfAllBlocks();
+
+        byte[] uncompressedBlock = new byte[header.blockSize];
+        byte[] allBlocks = new byte[totalBytesForAllBlocks];
+        try (DataInputStream allBlocksStream = new DataInputStream(source.getRange(HEADER_LENGTH, totalBytesForAllBlocks))) {
+            allBlocksStream.readFully(allBlocks);
+
+            int blockNo = 0;
+            for (BlockDescriptor blockDescriptor : this.footer.blockDescriptors) {
+                if (blocks[blockNo] == null) {
+                    DataInputStream dis = new DataInputStream(
+                            new GZIPInputStream(
+                                    new ByteArrayInputStream(
+                                            allBlocks,
+                                            blockDescriptor.offset - HEADER_LENGTH,
+                                            blockDescriptor.length)
+                            )
+                    );
+
+                    dis.readFully(uncompressedBlock);
+                    blocks[blockNo] = new ReadOnlyBlock(uncompressedBlock);
+                }
+                blockNo++;
             }
         } catch (IOException e) {
             throw new SSTableException("Error attempting to load all blocks from cache", e);
@@ -217,10 +228,10 @@ public class SSTable {
         }
 
         /**
-         * @param dos
+         * @param dos the outputstream to write to
          * @throws SSTableException
          */
-        public void writeTo(DataOutputStream dos) {
+        void writeTo(DataOutputStream dos) {
             try {
                 dos.writeInt(this.magic);
                 dos.writeInt(this.version);
@@ -236,29 +247,25 @@ public class SSTable {
     }
 
     static class Footer {
-        private static final int INDEX_ENTRY_METADATA_BYTES = 12;
+        private static final int BLOCK_DESCRIPTOR_HEADER_BYTES = 4;
+        private static final int BLOCK_DESCRIPTOR_BYTES = 8;
+        private static final int BLOCK_ENTRY_METADATA_BYTES = 12;
         private static final String ENTRY_ROW_KEY_SEPARATOR = "|";
+        private final List<BlockDescriptor> blockDescriptors;
         private final TreeBasedTable<String, String, BlockEntryDescriptor> keysToBlockEntries;
 
         Footer() {
+            this.blockDescriptors = newArrayList();
             this.keysToBlockEntries = create();
         }
 
-        /**
-         * Each entry is stored in the footer like so
-         * <p>
-         * <p>
-         * [length][     key     ][block-id][block-offset]
-         * <---4----------n------------4--------------4------>
-         * <-----------------------length-------------------->
-         *
-         * @return byte position of where the footer starts
-         */
+
         private Footer(Source source, int footerOffset, int compressedLength, int uncompressedLength) throws IOException, SSTableException {
             this();
             try (DataInputStream inputStream = new DataInputStream(new GZIPInputStream(source.getRange(footerOffset, compressedLength)))) {
                 LOGGER.info("Initialising SSTable footer at offset " + footerOffset);
                 int currentPos = 0;
+                currentPos += loadBlockDescriptors(inputStream);
 
                 while (currentPos < uncompressedLength) {
                     int bytesRead = readBlockEntry(inputStream);
@@ -267,32 +274,99 @@ public class SSTable {
             }
         }
 
-        void put(String rowName, String columnName, BlockEntryDescriptor blockEntryDescriptor) {
+        private int loadBlockDescriptors(DataInputStream inputStream) throws IOException {
+            int bytesRead = 0;
+            int noOfBlockDescriptors = inputStream.readInt();
+
+            bytesRead += BLOCK_DESCRIPTOR_HEADER_BYTES;
+            for (int descriptorsRead = 0; descriptorsRead < noOfBlockDescriptors; descriptorsRead++) {
+                this.blockDescriptors.add(new BlockDescriptor(
+                        inputStream.readInt(),
+                        inputStream.readInt()
+                ));
+                bytesRead += BLOCK_DESCRIPTOR_BYTES;
+            }
+
+            return bytesRead;
+        }
+
+        void putEntry(String rowName, String columnName, BlockEntryDescriptor blockEntryDescriptor) {
             this.keysToBlockEntries.put(rowName, columnName, blockEntryDescriptor);
+        }
+
+        void putBlockDescriptor(BlockDescriptor blockDescriptor) {
+            this.blockDescriptors.add(blockDescriptor);
+        }
+
+        BlockDescriptor getBlockDescriptor(int blockId) {
+            // cannot pass a block id >= number of descriptors
+            if (blockId < 0 || blockId >= blockDescriptors.size())
+                throw new IllegalArgumentException("Requested block id: " + blockId + " is invalid");
+
+
+            return blockDescriptors.get(blockId);
+        }
+
+        int computeLengthOfAllBlocks() {
+            return blockDescriptors
+                    .stream()
+                    .mapToInt(bd -> bd.length)
+                    .sum();
         }
 
         /**
          * @throws SSTableException
          */
-        public int writeTo(OutputStream out) {
+        int writeTo(OutputStream out) {
             try (DataOutputStream compressedOut = new DataOutputStream(new GZIPOutputStream(out))) {
-                this.keysToBlockEntries.cellSet().forEach((cell) -> {
-                    try {
-                        byte[] keyBytes = Joiner.on(ENTRY_ROW_KEY_SEPARATOR).join(cell.getRowKey(), cell.getColumnKey()).getBytes();
-                        int blockIndexEntryLength = keyBytes.length + INDEX_ENTRY_METADATA_BYTES;
-                        compressedOut.writeInt(blockIndexEntryLength);
-                        compressedOut.write(keyBytes);
-                        compressedOut.writeInt(cell.getValue().id);
-                        compressedOut.writeInt(cell.getValue().offset);
-                    } catch (IOException e) {
-                        throw new SSTableException("Error writing entry to footer", e);
-                    }
-                });
-
+                writeBlockDescriptors(compressedOut);
+                writeBlockEntries(compressedOut);
                 return compressedOut.size();
             } catch (IOException e) {
                 throw new SSTableException("Error writing to footer", e);
             }
+        }
+
+        /**
+         * [ no-of-descriptors ][ offset ][ length ][ offset ][ length ]...
+         * <---------4---------><--------8---------><--------8--------->
+         *
+         * @param out the output stream to write the block descriptors to
+         * @throws IOException
+         */
+        private void writeBlockDescriptors(DataOutputStream out) throws IOException {
+            out.writeInt(blockDescriptors.size());
+            this.blockDescriptors.forEach(bd -> {
+                try {
+                    out.writeInt(bd.offset);
+                    out.writeInt(bd.length);
+                } catch (IOException e) {
+                    throw new SSTableException("Error writing block descriptor to footer", e);
+                }
+            });
+        }
+
+        /**
+         * Each entry is stored like so
+         * <p>
+         * [entry-length][     key     ][block-id][block-offset]
+         * <---4--------><------n------><---4----><-----4------>
+         * <p>
+         * The entry length describes the length of the full entry
+         */
+        private void writeBlockEntries(DataOutputStream out) {
+            this.keysToBlockEntries.cellSet().forEach((cell) -> {
+                try {
+                    byte[] keyBytes = Joiner.on(ENTRY_ROW_KEY_SEPARATOR).join(cell.getRowKey(), cell.getColumnKey()).getBytes();
+                    int blockIndexEntryLength = keyBytes.length + BLOCK_ENTRY_METADATA_BYTES;
+                    out.writeInt(blockIndexEntryLength);
+                    out.write(keyBytes);
+                    out.writeInt(cell.getValue().id);
+                    out.writeInt(cell.getValue().offset);
+                } catch (IOException e) {
+                    throw new SSTableException("Error writing entry to footer", e);
+                }
+            });
         }
 
         private int readBlockEntry(DataInputStream inputStream) throws IOException {
@@ -301,7 +375,7 @@ public class SSTable {
             if (blockEntryLength <= 0)
                 throw new SSTableException("Footer is corrupt, cannot read block index entry");
 
-            byte[] keyBytes = new byte[blockEntryLength - INDEX_ENTRY_METADATA_BYTES];
+            byte[] keyBytes = new byte[blockEntryLength - BLOCK_ENTRY_METADATA_BYTES];
             inputStream.readFully(keyBytes);
 
             int blockId = inputStream.readInt();
@@ -315,6 +389,5 @@ public class SSTable {
 
             return blockEntryLength;
         }
-
     }
 }

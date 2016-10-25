@@ -16,7 +16,7 @@ class ReadOnlyBlock implements Block {
     }
 
     public String read(int offsetInBlock) {
-        checkArgument(entries.containsKey(offsetInBlock), "Invalid offset requested!");
+        checkArgument(entries.containsKey(offsetInBlock), "Invalid offset requested! (" + offsetInBlock + ")");
         return entries.get(offsetInBlock);
     }
 
@@ -38,6 +38,5 @@ class ReadOnlyBlock implements Block {
             entries.put(position, new String(bytes));
             position = buffer.position();
         }
-
     }
 }

@@ -71,6 +71,7 @@ public class SSTableTest {
         assertThat(SS_TABLE.blockSize(), is(64000));
     }
 
+    //TODO: these tests are wrong
     @Test(expected = SSTableException.class)
     public void shouldFailToLoadSSTableIfHasInvalidMagic() throws Exception {
         Path path = get(getResource("invalid-magic.db").toURI());

@@ -7,6 +7,7 @@ import io.github.djhworld.model.RowMutation;
 import java.io.Closeable;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.zip.GZIPOutputStream;
 
 import static io.github.djhworld.sstable.SSTable.Footer;
 import static io.github.djhworld.sstable.SSTable.Header;
@@ -49,7 +50,7 @@ public class SSTableWriter implements Closeable {
         }
 
         int blockOffset = this.currentBlock.put(rowMutation.value);
-        this.footer.put(rowMutation.rowKey, rowMutation.columnKey, BlockEntryDescriptor.of(this.currentBlockNo, blockOffset));
+        this.footer.putEntry(rowMutation.rowKey, rowMutation.columnKey, BlockEntryDescriptor.of(this.currentBlockNo, blockOffset));
     }
 
     @Override
@@ -88,7 +89,22 @@ public class SSTableWriter implements Closeable {
     }
 
     private void flushCurrentBlock() throws IOException {
-        currentBlock.flushTo(dos);
+        int blockStart = getNoOfBytesWritten();
+
+        GZIPOutputStream gzipOutputStream = new GZIPOutputStream(dos);
+        currentBlock.flushTo(gzipOutputStream);
+        gzipOutputStream.finish();
+
+        int blockEnd = getNoOfBytesWritten();
+        int blockLength = blockEnd - blockStart;
+
+        this.footer.putBlockDescriptor(
+                new BlockDescriptor(
+                        blockStart,
+                        blockLength
+                )
+        );
+
         currentBlockNo++;
     }
 }
