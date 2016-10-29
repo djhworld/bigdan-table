@@ -3,16 +3,16 @@ I enjoyed reading the BigTable paper so much I decided to go ahead and attempt t
 Concepts worked on: 
 
 * SSTable 
-  * :tick: Blocks compressed with GZIP
-  * :tick: Footer compressed with GZIP
-  * :tick: Configurable block size
+  * :white_check_mark: Blocks compressed with GZIP
+  * :white_check_mark: Footer compressed with GZIP
+  * :white_check_mark: Configurable block size
 * Tablet
-  * :tick: Read/Write to memtable
-  * :tick: Read/Flush to SSTable
-    * :tick: Amazon S3 supported 
-    * :tick: Local filesystem
-  * :tick: Tablet compaction
-  * :cross: Tablet split
+  * :white_check_mark: Read/Write to memtable
+  * :white_check_mark: Read/Flush to SSTable
+    * :white_check_mark: Amazon S3 supported 
+    * :white_check_mark: Local filesystem
+  * :white_check_mark: Tablet compaction
+  * :x: Tablet split
 * TabletServer
   * in progress
 
