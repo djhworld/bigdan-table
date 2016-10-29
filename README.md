@@ -21,3 +21,17 @@ Concepts worked on:
 * TabletServer
   * in progress
 
+## SSTable 
+
+![Alt text](/sstable.png?raw=true "SSTable")
+
+Blocks are of fixed length and block size is stored in the header.
+All blocks are compressed using GZIP.
+Footer is compressed using GZIP.
+
+Reader will
+
+1. Read header
+2. Read footer
+
+Blocks are read when a value is requested, and cached if appropriate.
