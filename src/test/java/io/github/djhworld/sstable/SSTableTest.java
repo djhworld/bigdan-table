@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.google.common.io.Resources.getResource;
 import static java.nio.file.Paths.get;
+import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
@@ -47,6 +48,14 @@ public class SSTableTest {
         assertThat(SS_TABLE.contains("com.amazon", "unknownFamily:column0"), is(false));
         assertThat(SS_TABLE.contains("com.amazon", "page:unknownColumn"), is(false));
     }
+
+    @Test
+    public void shouldReturnEmptyForItemMissing() throws Exception {
+        assertThat(SS_TABLE.get("unknownRow", "page:column0"), is(empty()));
+        assertThat(SS_TABLE.get("com.amazon", "unknownFamily:column0"), is(empty()));
+        assertThat(SS_TABLE.get("com.amazon", "page:unknownColumn"), is(empty()));
+    }
+
 
     @Test
     public void shouldRetrieveCorrectItemForKey() throws Exception {
