@@ -2,17 +2,19 @@ I enjoyed reading the BigTable paper so much I decided to go ahead and attempt t
 
 Concepts worked on: 
 
-* SSTable 
-  * :white_check_mark: Blocks compressed with GZIP
-  * :white_check_mark: Footer compressed with GZIP
-  * :white_check_mark: Configurable block size
 * Tablet
+  * :x: Timestamped values
   * :white_check_mark: Read/Write to memtable
   * :white_check_mark: Read/Flush to SSTable
     * :white_check_mark: Amazon S3 supported 
     * :white_check_mark: Local filesystem
   * :white_check_mark: Tablet compaction
   * :x: Tablet split
+  
+* SSTable 
+  * :white_check_mark: Blocks compressed with GZIP
+  * :white_check_mark: Footer compressed with GZIP
+  * :white_check_mark: Configurable block size
 * TabletServer
   * in progress
 
