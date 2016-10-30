@@ -11,7 +11,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import static com.google.common.collect.Maps.newHashMap;
 import static com.google.common.collect.TreeRangeMap.create;
 import static java.util.concurrent.TimeUnit.HOURS;
-import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class TabletServer {
     public static final int TABLET_MEMTABLE_LIMIT = 10_000_000;
@@ -75,6 +74,6 @@ public class TabletServer {
                     // TODO: what happens if the tablet cannot compact?
                 }
             });
-        }, 0, 10, MINUTES);
+        }, 0, 1, HOURS);
     }
 }

@@ -22,7 +22,7 @@ public class CommitLog implements Iterable<RowMutation>, Closeable {
     }
 
     public synchronized void commit(RowMutation rowMutation) throws IOException {
-        //check if output is still open?
+        //TODO: check if output is still open?
         outputStream.write(
                 rowMutation.serialise() //more efficient way of doing this?
         );

@@ -343,7 +343,7 @@ public class SSTable {
                     out.writeInt(bd.offset);
                     out.writeInt(bd.length);
                 } catch (IOException e) {
-                    throw new SSTableException("Error writing block descripto150000000r to footer", e);
+                    throw new SSTableException("Error writing block descriptor to footer", e);
                 }
             });
         }
