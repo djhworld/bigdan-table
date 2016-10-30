@@ -1,13 +1,14 @@
 package io.github.djhworld.model;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 
 import java.util.Iterator;
 
-import static com.google.common.base.Joiner.on;
-
 public class RowMutation {
-    public static final String SEPARATOR = "|||";
+    private static final String SEPARATOR = "|||";
+    private static final Joiner JOINER = Joiner.on(SEPARATOR);
+    private static final Splitter SPLITTER = Splitter.on(SEPARATOR);
     public final Action action;
     public final String rowKey;
     public final String columnKey;
@@ -20,8 +21,12 @@ public class RowMutation {
         this.value = value;
     }
 
+    public int size() {
+        return rowKey.length() + columnKey.length() + value.length();
+    }
+
     public byte[] serialise() {
-        return on(SEPARATOR).join(
+        return JOINER.join(
                 action,
                 rowKey,
                 columnKey,
@@ -38,8 +43,7 @@ public class RowMutation {
     }
 
     public static RowMutation deserialise(String value) {
-        Iterator<String> split = Splitter.on(SEPARATOR)
-                .split(value).iterator();
+        Iterator<String> split = SPLITTER.split(value).iterator();
 
         return new RowMutation(
                 Action.valueOf(split.next()),

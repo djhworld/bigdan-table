@@ -17,10 +17,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.google.common.collect.TreeBasedTable.create;
-import static io.github.djhworld.model.RowMutation.newAddMutation;
 import static java.time.LocalDateTime.now;
 import static java.time.format.DateTimeFormatter.ofPattern;
 import static java.util.Optional.empty;
@@ -36,6 +36,7 @@ public class Tablet {
     private final TabletMetadataService metadataService;
     private final AtomicLong approximateMemTableSizeInBytes;
     private final AtomicLong flushCount;
+    private final AtomicBoolean isFlushing;
     private final CommitLog commitLog;
     private final TabletStore tabletStore;
 
@@ -53,7 +54,9 @@ public class Tablet {
             this.memTable = create();
             this.flushCount = new AtomicLong(0);
             this.approximateMemTableSizeInBytes = new AtomicLong(0);
+            this.isFlushing = new AtomicBoolean(false);
 
+            //TODO: when to close?
             this.commitLog = tabletMetadataService.getCurrentCommitLog(tabletId);
             if (commitLog.exists())
                 restoreFromCommitLog();
@@ -106,11 +109,14 @@ public class Tablet {
         return empty();
     }
 
+    //TODO: what if compacting?
     public synchronized void flush() {
         synchronized (memTable) {
             try {
                 if (memTable.isEmpty())
                     return;
+
+                this.isFlushing.set(true);
 
                 LOGGER.info("Flushing mem table to SSTable as it is " + approximateMemTableSizeInBytes.get() + " bytes");
                 int currentTabletGeneration = metadataService.getCurrentTabletGeneration(tabletId);
@@ -124,18 +130,22 @@ public class Tablet {
                                 tabletStore.get(currentTabletGeneration, filename)
                         )
                 );
+
                 this.memTable = create();
                 this.flushCount.incrementAndGet();
             } catch (Exception e) {
                 throw new TabletException("Caught error attempting to flushTo mem table to SSTable", e);
+            } finally {
+                this.isFlushing.set(false);
             }
         }
     }
 
+    //TODO: what if flushing?
     public synchronized void compact() {
         synchronized (ssTables) {
             try {
-                if (ssTables.size() > 0) {
+                if (ssTables.size() > 1) {
                     int currentTabletGeneration = metadataService.getCurrentTabletGeneration(tabletId);
 
                     LOGGER.info("Compacting tablet generation " + currentTabletGeneration);
@@ -193,7 +203,7 @@ public class Tablet {
             commitLog.commit(rowMutation);
 
         this.memTable.put(rowMutation.rowKey, rowMutation.columnKey, rowMutation.value);
-        this.approximateMemTableSizeInBytes.addAndGet(rowMutation.serialise().length);
+        this.approximateMemTableSizeInBytes.addAndGet(rowMutation.size());
     }
 
     private void delete(RowMutation rowMutation, boolean requiresCommit) throws IOException {
@@ -238,11 +248,9 @@ public class Tablet {
         try (SSTableWriter ssTableWriter = new SSTableWriter(tabletStore.newSink(tabletGeneration, filename))) {
             for (Table.Cell<String, String, String> cell : data.cellSet()) {
                 ssTableWriter.write(
-                        newAddMutation(
-                                cell.getRowKey(),
-                                cell.getColumnKey(),
-                                cell.getValue()
-                        )
+                        cell.getRowKey(),
+                        cell.getColumnKey(),
+                        cell.getValue()
                 );
             }
         }

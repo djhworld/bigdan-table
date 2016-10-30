@@ -2,7 +2,6 @@ package io.github.djhworld.sstable;
 
 import io.github.djhworld.io.RewindableByteArrayOutputStream;
 import io.github.djhworld.io.Sink;
-import io.github.djhworld.model.RowMutation;
 
 import java.io.Closeable;
 import java.io.DataOutputStream;
@@ -43,14 +42,14 @@ public class SSTableWriter implements Closeable {
     /**
      * Keys will be inserted into the footer
      */
-    public void write(RowMutation rowMutation) throws IOException {
-        if (!currentBlock.hasEnoughSpaceFor(rowMutation.value)) {
+    public void write(String rowKey, String columnKey, String value) throws IOException {
+        if (!currentBlock.hasEnoughSpaceFor(value)) {
             flushCurrentBlock();
             this.currentBlock = newBlock();
         }
 
-        int blockOffset = this.currentBlock.put(rowMutation.value);
-        this.footer.putEntry(rowMutation.rowKey, rowMutation.columnKey, BlockEntryDescriptor.of(this.currentBlockNo, blockOffset));
+        int blockOffset = this.currentBlock.put(value);
+        this.footer.putEntry(rowKey, columnKey, BlockEntryDescriptor.of(this.currentBlockNo, blockOffset));
     }
 
     @Override

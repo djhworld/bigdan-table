@@ -47,7 +47,7 @@ public class SSTableWriterTest {
         FileSink sink = new FileSink(DATA_DB);
         try (SSTableWriter ssTableWriter = new SSTableWriter(sink)) {
             for (RowMutation mutation : MUTATIONS) {
-                ssTableWriter.write(mutation);
+                ssTableWriter.write(mutation.rowKey, mutation.columnKey, mutation.value);
             }
         }
         SSTable ssTable = new SSTable(new FileSource(DATA_DB));

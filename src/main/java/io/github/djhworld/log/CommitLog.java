@@ -9,23 +9,25 @@ import java.nio.file.Path;
 import java.util.Iterator;
 
 import static io.github.djhworld.model.RowMutation.deserialise;
+import static org.apache.commons.io.IOUtils.closeQuietly;
 
-public class CommitLog implements Iterable<RowMutation> {
+public class CommitLog implements Iterable<RowMutation>, Closeable {
     private static final byte[] NEWLINE = "\n".getBytes();
     private final Path location;
+    private OutputStream outputStream;
 
-    public CommitLog(Path location) {
+    public CommitLog(Path location) throws IOException {
         this.location = location;
+        this.outputStream = new FileOutputStream(location.toFile(), true);
     }
 
     public synchronized void commit(RowMutation rowMutation) throws IOException {
-        try (FileOutputStream outputStream = new FileOutputStream(location.toFile(), true)) {
-            outputStream.write(
-                    rowMutation.serialise()
-            );
-            outputStream.write(NEWLINE);
-            outputStream.flush();
-        }
+        //check if output is still open?
+        outputStream.write(
+                rowMutation.serialise() //more efficient way of doing this?
+        );
+        outputStream.write(NEWLINE);
+        outputStream.flush();
     }
 
     public boolean exists() {
@@ -68,5 +70,10 @@ public class CommitLog implements Iterable<RowMutation> {
         };
 
         return iterator;
+    }
+
+    @Override
+    public void close() throws IOException {
+        closeQuietly(outputStream);
     }
 }

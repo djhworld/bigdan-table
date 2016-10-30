@@ -18,7 +18,10 @@ Concepts worked on:
   * :white_check_mark: Footer compressed with GZIP
   * :white_check_mark: Configurable block size
   * :white_check_mark: Storage agnostic
+
 * TabletServer
+  * :white_check_mark: Each tablet responsible for a row range
+  * :x: column family locality 
   * in progress
 
 ## SSTable 

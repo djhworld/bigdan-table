@@ -251,6 +251,8 @@ public class SSTable {
         private static final int BLOCK_DESCRIPTOR_BYTES = 8;
         private static final int BLOCK_ENTRY_METADATA_BYTES = 12;
         private static final String ENTRY_ROW_KEY_SEPARATOR = "|";
+        private static final Splitter ENTRY_ROW_KEY_SPLITTER = Splitter.on(ENTRY_ROW_KEY_SEPARATOR);
+        private static final Joiner ENTRY_ROW_KEY_JOINER = Joiner.on(ENTRY_ROW_KEY_SEPARATOR);
         private final List<BlockDescriptor> blockDescriptors;
         private final TreeBasedTable<String, String, BlockEntryDescriptor> keysToBlockEntries;
 
@@ -341,7 +343,7 @@ public class SSTable {
                     out.writeInt(bd.offset);
                     out.writeInt(bd.length);
                 } catch (IOException e) {
-                    throw new SSTableException("Error writing block descriptor to footer", e);
+                    throw new SSTableException("Error writing block descripto150000000r to footer", e);
                 }
             });
         }
@@ -357,7 +359,7 @@ public class SSTable {
         private void writeBlockEntries(DataOutputStream out) {
             this.keysToBlockEntries.cellSet().forEach((cell) -> {
                 try {
-                    byte[] keyBytes = Joiner.on(ENTRY_ROW_KEY_SEPARATOR).join(cell.getRowKey(), cell.getColumnKey()).getBytes();
+                    byte[] keyBytes = ENTRY_ROW_KEY_JOINER.join(cell.getRowKey(), cell.getColumnKey()).getBytes();
                     int blockIndexEntryLength = keyBytes.length + BLOCK_ENTRY_METADATA_BYTES;
                     out.writeInt(blockIndexEntryLength);
                     out.write(keyBytes);
@@ -381,7 +383,8 @@ public class SSTable {
             int blockId = inputStream.readInt();
             int blockOffset = inputStream.readInt();
 
-            Iterator<String> rowKey = Splitter.on(ENTRY_ROW_KEY_SEPARATOR).split(new String(keyBytes)).iterator();
+            Iterator<String> rowKey = ENTRY_ROW_KEY_SPLITTER.split(new String(keyBytes)).iterator();
+
             this.keysToBlockEntries.put(
                     rowKey.next(),
                     rowKey.next(),

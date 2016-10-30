@@ -11,9 +11,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import static com.google.common.collect.Maps.newHashMap;
 import static com.google.common.collect.TreeRangeMap.create;
 import static java.util.concurrent.TimeUnit.HOURS;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class TabletServer {
-    public static final int TABLET_MEMTABLE_LIMIT = 100_000_000;
+    public static final int TABLET_MEMTABLE_LIMIT = 10_000_000;
     private final TabletMetadataService metadataService;
     private final RangeMap<String, String> rowRangeToTabletsMap;
     private final Map<String, Tablet> tabletIdToTabletMap;
@@ -44,8 +45,10 @@ public class TabletServer {
     public void apply(RowMutation rowMutation) {
         Tablet tabletFor = getTabletFor(rowMutation.rowKey);
 
-        if (tabletFor.approximateMemTableSizeInBytes() > TABLET_MEMTABLE_LIMIT)
+        //TODO: this should be placed on tablet instead?
+        if (tabletFor.approximateMemTableSizeInBytes() > TABLET_MEMTABLE_LIMIT) {
             tabletFor.flush();
+        }
 
         tabletFor.apply(rowMutation);
     }
@@ -72,6 +75,6 @@ public class TabletServer {
                     // TODO: what happens if the tablet cannot compact?
                 }
             });
-        }, 0, 1, HOURS);
+        }, 0, 10, MINUTES);
     }
 }
