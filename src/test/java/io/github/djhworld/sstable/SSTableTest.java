@@ -6,6 +6,7 @@ import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,15 +20,15 @@ import static org.junit.Assert.assertThat;
 import static org.junit.runners.MethodSorters.NAME_ASCENDING;
 
 @FixMethodOrder(value = NAME_ASCENDING)
-public class SSTableTest {
-    public static final String TEST_DATA_DB = "test-data.db";
-    public static final int NO_OF_ITEMS = 9996;
+public class SSTableTest extends AbstractSSTableTest {
+    static final int NO_OF_ITEMS = 9996;
     private static SSTable SS_TABLE;
 
     @BeforeClass
-    public static void beforeClass() throws Exception {
-        Path path = get(getResource(TEST_DATA_DB).toURI());
-        SS_TABLE = new SSTable(new FileSource(path));
+    public static void beforeClass() throws IOException {
+        init();
+        writeSSTable();
+        SS_TABLE = new SSTable(new FileSource(TEMP_FILE.toPath()));
     }
 
     @Test
@@ -102,8 +103,7 @@ public class SSTableTest {
 
     @Test
     public void shouldScanInOrderAndLoadAllBlocksIntoCache() throws Exception {
-        Path path = get(getResource(TEST_DATA_DB).toURI());
-        SS_TABLE = new SSTable(new FileSource(path));
+        SS_TABLE = new SSTable(new FileSource(TEMP_FILE.toPath()));
 
         assertThat(SS_TABLE.cachedBlocks(), is(0L));
 

@@ -2,6 +2,7 @@ package io.github.djhworld.log;
 
 import io.github.djhworld.log.exception.CommitLogException;
 import io.github.djhworld.model.RowMutation;
+import org.slf4j.Logger;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -10,13 +11,16 @@ import java.util.Iterator;
 
 import static io.github.djhworld.model.RowMutation.deserialise;
 import static org.apache.commons.io.IOUtils.closeQuietly;
+import static org.slf4j.LoggerFactory.getLogger;
 
 public class CommitLog implements Iterable<RowMutation>, Closeable {
+    private static final Logger LOGGER = getLogger(CommitLog.class);
     private static final byte[] NEWLINE = "\n".getBytes();
     private final Path location;
     private OutputStream outputStream;
 
     public CommitLog(Path location) throws IOException {
+        LOGGER.info("Loading commit log at " + location);
         this.location = location;
         this.outputStream = new FileOutputStream(location.toFile(), true);
     }

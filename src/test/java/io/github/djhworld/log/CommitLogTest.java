@@ -4,6 +4,7 @@ import io.github.djhworld.model.RowMutation;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -17,12 +18,12 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 
 public class CommitLogTest {
-
-    public static final Path LOCATION = get("/Users/danielharper/tmp/sstables/commitlog.log");
+    public File TEMP_FILE;
 
     @Before
     public void setUp() throws Exception {
-        Files.deleteIfExists(LOCATION);
+        TEMP_FILE = File.createTempFile("commit" + System.currentTimeMillis(), ".log");
+        TEMP_FILE.deleteOnExit();
     }
 
     @Test
@@ -43,7 +44,7 @@ public class CommitLogTest {
                 newDeleteMutation("row", "key")
         );
 
-        CommitLog commitLog = new CommitLog(LOCATION);
+        CommitLog commitLog = new CommitLog(TEMP_FILE.toPath());
 
         for (RowMutation mutation : expected) {
             commitLog.commit(mutation);
