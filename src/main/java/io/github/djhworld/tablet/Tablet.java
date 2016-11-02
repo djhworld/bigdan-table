@@ -17,7 +17,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.Stack;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.google.common.collect.TreeBasedTable.create;
@@ -36,7 +35,6 @@ public class Tablet {
     private final TabletMetadataService metadataService;
     private final AtomicLong approximateMemTableSizeInBytes;
     private final AtomicLong flushCount;
-    private final AtomicBoolean isFlushing;
     private final CommitLog commitLog;
     private final TabletStore tabletStore;
 
@@ -54,7 +52,6 @@ public class Tablet {
             this.memTable = create();
             this.flushCount = new AtomicLong(0);
             this.approximateMemTableSizeInBytes = new AtomicLong(0);
-            this.isFlushing = new AtomicBoolean(false);
 
             //TODO: when to close?
             this.commitLog = tabletMetadataService.getCurrentCommitLog(tabletId);
@@ -116,8 +113,6 @@ public class Tablet {
                 if (memTable.isEmpty())
                     return;
 
-                this.isFlushing.set(true);
-
                 LOGGER.info("Flushing mem table to SSTable as it is " + approximateMemTableSizeInBytes.get() + " bytes");
                 int currentTabletGeneration = metadataService.getCurrentTabletGeneration(tabletId);
                 this.approximateMemTableSizeInBytes.set(0);
@@ -133,10 +128,9 @@ public class Tablet {
 
                 this.memTable = create();
                 this.flushCount.incrementAndGet();
+                this.commitLog.checkpoint();
             } catch (Exception e) {
                 throw new TabletException("Caught error attempting to flushTo mem table to SSTable", e);
-            } finally {
-                this.isFlushing.set(false);
             }
         }
     }

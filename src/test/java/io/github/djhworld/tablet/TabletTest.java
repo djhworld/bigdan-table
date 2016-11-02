@@ -145,6 +145,8 @@ public class TabletTest {
         assertThat(source.list(1).size(), is(1));
         assertThat(tablet.get("a", "b"), is(of("c")));
         assertThat(tablet.get("c", "b"), is(of("a")));
+
+        verify(mockedCommitLog, times(1)).checkpoint();
     }
 
 

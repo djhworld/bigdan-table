@@ -1,19 +1,21 @@
 package io.github.djhworld.log;
 
 import io.github.djhworld.model.RowMutation;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static io.github.djhworld.Matchers.rowMutationMatcher;
 import static io.github.djhworld.model.RowMutation.newAddMutation;
 import static io.github.djhworld.model.RowMutation.newDeleteMutation;
-import static java.nio.file.Paths.get;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 
@@ -56,4 +58,45 @@ public class CommitLogTest {
             index++;
         }
     }
+
+    @Test
+    public void shouldCheckpointCommitLog() throws Exception {
+        List<RowMutation> firstTranch = newArrayList(
+                newAddMutation("ro1", "col1", "value"),
+                newAddMutation("row2", "col2", "value"),
+                newAddMutation("row3", "col3", "value")
+        );
+
+        List<RowMutation> secondTranch = newArrayList(
+                newAddMutation("row4", "col4", "value"),
+                newAddMutation("row5", "col5", "value"),
+                newAddMutation("row6", "col6", "value")
+        );
+
+
+        CommitLog commitLog = new CommitLog(TEMP_FILE.toPath());
+
+        for (RowMutation mutation : firstTranch) {
+            commitLog.commit(mutation);
+        }
+
+        commitLog.checkpoint();
+
+        for (RowMutation mutation : secondTranch) {
+            commitLog.commit(mutation);
+        }
+
+        int index = 0;
+        for (RowMutation committedMutation : commitLog) {
+            assertThat(committedMutation, is(rowMutationMatcher(secondTranch.get(index))));
+            index++;
+        }
+    }
+
+
+    @Test
+    public void shouldPropagateErrorIfCheckpointFails() throws Exception {
+        Assert.fail("TODO");
+    }
+
 }
