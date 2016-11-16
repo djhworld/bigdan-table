@@ -3,7 +3,9 @@ I enjoyed reading the BigTable paper so much I decided to go ahead and attempt t
 Concepts worked on: 
 
 * Tablet
-  * :x: Timestamped values
+  * :x: Scan/filter entire tablet
+  * :x: Scan/filter entire row 
+  * :white_check_mark: Timestamped values
   * :white_check_mark: Read/Write to memtable
   * :bulb: Commit log 
     * Need to figure out how this is stored and how to checkpoint it....
