@@ -3,6 +3,7 @@ package io.github.djhworld.tablet;
 import com.amazonaws.services.s3.AmazonS3Client;
 import io.github.djhworld.log.CommitLog;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.Mock;
 
@@ -16,6 +17,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
 
+@Ignore
 public class S3BasedTabletStoreTest {
     @Mock
     private TabletMetadataService mockedTabletMetadataService;

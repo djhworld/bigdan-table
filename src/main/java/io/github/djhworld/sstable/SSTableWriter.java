@@ -42,14 +42,17 @@ public class SSTableWriter implements Closeable {
     /**
      * Keys will be inserted into the footer
      */
-    public void write(String rowKey, String columnKey, String value) throws IOException {
+    public void write(String rowKey, String columnKey, String value, long timestamp) throws IOException {
         if (!currentBlock.hasEnoughSpaceFor(value)) {
             flushCurrentBlock();
             this.currentBlock = newBlock();
         }
 
         int blockOffset = this.currentBlock.put(value);
-        this.footer.putEntry(rowKey, columnKey, BlockEntryDescriptor.of(this.currentBlockNo, blockOffset));
+        this.footer.putEntry(
+                rowKey,
+                columnKey,
+                BlockEntryDescriptor.of(this.currentBlockNo, timestamp, blockOffset));
     }
 
     @Override

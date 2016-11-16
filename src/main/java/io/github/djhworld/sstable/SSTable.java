@@ -60,29 +60,33 @@ public class SSTable {
         );
     }
 
+    //TODO: get all versions?
     public Optional<String> get(String rowName, String columnName) {
-        BlockEntryDescriptor blockEntryDescriptor = this.footer.keysToBlockEntries.get(rowName, columnName);
+        List<BlockEntryDescriptor> blockEntryDescriptors =
+                this.footer.keysToBlockEntries.get(rowName, columnName);
 
-        if (blockEntryDescriptor == null)
+        if (blockEntryDescriptors == null || blockEntryDescriptors.size() == 0)
             return empty();
 
-        return ofNullable(getValueFromBlock(blockEntryDescriptor));
+        return ofNullable(getValueFromBlock(blockEntryDescriptors.get(0)));
     }
 
     public void scanRow(String rowKey, String columnFamily, String columnKeyRegex, Consumer<RowMutation> consumer) {
-        SortedMap<String, BlockEntryDescriptor> row = this.footer.keysToBlockEntries.row(rowKey);
+        SortedMap<String, List<BlockEntryDescriptor>> row = this.footer.keysToBlockEntries.row(rowKey);
 
         if (row == null)
             return;
 
         boolean columnFamilyFound = false;
-        for (Map.Entry<String, BlockEntryDescriptor> entry : row.entrySet()) {
+        for (Map.Entry<String, List<BlockEntryDescriptor>> entry : row.entrySet()) {
             if (entry.getKey().startsWith(columnFamily)) {
                 columnFamilyFound = true;
                 Matcher matcher = compile(columnFamily + ":" + columnKeyRegex).matcher(entry.getKey());
                 if (matcher.matches()) {
-                    String value = getValueFromBlock(entry.getValue());
-                    consumer.accept(newAddMutation(rowKey, entry.getKey(), value));
+                    for(BlockEntryDescriptor entryVersion : entry.getValue()) {
+                        String value = getValueFromBlock(entryVersion);
+                        consumer.accept(newAddMutation(rowKey, entry.getKey(), value, entryVersion.timestamp));
+                    }
                 }
             }
 
@@ -94,8 +98,15 @@ public class SSTable {
     public void scan(Consumer<RowMutation> consumer) {
         this.loadAllBlocks();
         this.footer.keysToBlockEntries.cellSet().forEach((cell) -> {
-            String value = getValueFromBlock(cell.getValue());
-            consumer.accept(newAddMutation(cell.getRowKey(), cell.getColumnKey(), value));
+            for (BlockEntryDescriptor blockEntryDescriptor : cell.getValue()) {
+                String value = getValueFromBlock(blockEntryDescriptor);
+                consumer.accept(
+                        newAddMutation(
+                                cell.getRowKey(),
+                                cell.getColumnKey(),
+                                value,
+                                blockEntryDescriptor.timestamp));
+            }
         });
     }
 
@@ -249,12 +260,12 @@ public class SSTable {
     static class Footer {
         private static final int BLOCK_DESCRIPTOR_HEADER_BYTES = 4;
         private static final int BLOCK_DESCRIPTOR_BYTES = 8;
-        private static final int BLOCK_ENTRY_METADATA_BYTES = 12;
+        private static final int BLOCK_ENTRY_METADATA_BYTES = 20;
         private static final String ENTRY_ROW_KEY_SEPARATOR = "|";
         private static final Splitter ENTRY_ROW_KEY_SPLITTER = Splitter.on(ENTRY_ROW_KEY_SEPARATOR);
         private static final Joiner ENTRY_ROW_KEY_JOINER = Joiner.on(ENTRY_ROW_KEY_SEPARATOR);
         private final List<BlockDescriptor> blockDescriptors;
-        private final TreeBasedTable<String, String, BlockEntryDescriptor> keysToBlockEntries;
+        private final TreeBasedTable<String, String, List<BlockEntryDescriptor>> keysToBlockEntries;
 
         Footer() {
             this.blockDescriptors = newArrayList();
@@ -293,7 +304,12 @@ public class SSTable {
         }
 
         void putEntry(String rowName, String columnName, BlockEntryDescriptor blockEntryDescriptor) {
-            this.keysToBlockEntries.put(rowName, columnName, blockEntryDescriptor);
+            List<BlockEntryDescriptor> blockEntryDescriptors = this.keysToBlockEntries.get(rowName, columnName);
+            if (blockEntryDescriptors == null) {
+                blockEntryDescriptors = newArrayList();
+                this.keysToBlockEntries.put(rowName, columnName, blockEntryDescriptors);
+            }
+            blockEntryDescriptors.add(blockEntryDescriptor);
         }
 
         void putBlockDescriptor(BlockDescriptor blockDescriptor) {
@@ -359,12 +375,15 @@ public class SSTable {
         private void writeBlockEntries(DataOutputStream out) {
             this.keysToBlockEntries.cellSet().forEach((cell) -> {
                 try {
-                    byte[] keyBytes = ENTRY_ROW_KEY_JOINER.join(cell.getRowKey(), cell.getColumnKey()).getBytes();
-                    int blockIndexEntryLength = keyBytes.length + BLOCK_ENTRY_METADATA_BYTES;
-                    out.writeInt(blockIndexEntryLength);
-                    out.write(keyBytes);
-                    out.writeInt(cell.getValue().id);
-                    out.writeInt(cell.getValue().offset);
+                    for (BlockEntryDescriptor entryDescriptor : cell.getValue()) {
+                        byte[] keyBytes = ENTRY_ROW_KEY_JOINER.join(cell.getRowKey(), cell.getColumnKey()).getBytes();
+                        int blockIndexEntryLength = keyBytes.length + BLOCK_ENTRY_METADATA_BYTES;
+                        out.writeInt(blockIndexEntryLength);
+                        out.write(keyBytes);
+                        out.writeInt(entryDescriptor.id);
+                        out.writeLong(entryDescriptor.timestamp);
+                        out.writeInt(entryDescriptor.offset);
+                    }
                 } catch (IOException e) {
                     throw new SSTableException("Error writing entry to footer", e);
                 }
@@ -381,15 +400,12 @@ public class SSTable {
             inputStream.readFully(keyBytes);
 
             int blockId = inputStream.readInt();
+            long timestamp = inputStream.readLong();
             int blockOffset = inputStream.readInt();
 
             Iterator<String> rowKey = ENTRY_ROW_KEY_SPLITTER.split(new String(keyBytes)).iterator();
 
-            this.keysToBlockEntries.put(
-                    rowKey.next(),
-                    rowKey.next(),
-                    BlockEntryDescriptor.of(blockId, blockOffset));
-
+            this.putEntry(rowKey.next(), rowKey.next(), BlockEntryDescriptor.of(blockId, timestamp, blockOffset));
             return blockEntryLength;
         }
     }

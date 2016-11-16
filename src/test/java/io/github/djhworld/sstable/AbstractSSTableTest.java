@@ -34,7 +34,7 @@ public class AbstractSSTableTest {
         FileSink sink = new FileSink(TEMP_FILE.toPath());
         try (SSTableWriter ssTableWriter = new SSTableWriter(sink)) {
             for (RowMutation mutation : MUTATIONS) {
-                ssTableWriter.write(mutation.rowKey, mutation.columnKey, mutation.value);
+                ssTableWriter.write(mutation.rowKey, mutation.columnKey, mutation.value, mutation.timestamp);
             }
         }
     }

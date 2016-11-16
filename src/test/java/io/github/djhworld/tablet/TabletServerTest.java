@@ -4,6 +4,7 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
+import org.junit.Ignore;
 
 import java.time.LocalDate;
 import java.util.Scanner;
@@ -12,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Range.closed;
 
+@Ignore
 public class TabletServerTest {
 
     public static final String SEPARATOR = ".";

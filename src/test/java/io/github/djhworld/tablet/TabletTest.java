@@ -74,6 +74,8 @@ public class TabletTest {
                     newAddMutation("row3", "col3", "val3"),
                     newDeleteMutation("row1", "col1"),
                     newAddMutation("row1", "col1", "valNEW"),
+                    newAddMutation("row1", "col1", "valNEW3"),
+                    newAddMutation("row1", "col1", "valNEW4"),
                     newDeleteMutation("row3", "col3")
             );
             Iterator<RowMutation> iterator = entries.iterator();
@@ -91,7 +93,7 @@ public class TabletTest {
 
         Tablet tablet = new Tablet("id", mockedTabletMetadataService);
         verify(mockedCommitLog, times(1)).exists();
-        assertThat(tablet.get("row1", "col1"), is(of("valNEW")));
+        assertThat(tablet.get("row1", "col1"), is(of("valNEW4")));
         assertThat(tablet.get("row2", "col2"), is(of("val2")));
         assertThat(tablet.get("row3", "col3"), is(empty()));
     }
@@ -99,19 +101,61 @@ public class TabletTest {
     @Test
     public void shouldInsertRecords() throws Exception {
         Tablet tablet = new Tablet("id", mockedTabletMetadataService);
-        tablet.apply(newAddMutation("a", "b", "c"));
-        tablet.apply(newAddMutation("c", "b", "a"));
+        tablet.apply(newAddMutation("a", "b", "c1"));
+        tablet.apply(newAddMutation("c", "b", "a1"));
+        tablet.apply(newAddMutation("a", "b", "c2"));
+        tablet.apply(newAddMutation("c", "b", "a2"));
         assertThat(tablet.size(), is(2));
 
-        assertThat(tablet.get("a", "b"), is(of("c")));
-        assertThat(tablet.get("c", "b"), is(of("a")));
+        assertThat(tablet.get("a", "b"), is(of("c2")));
+        assertThat(tablet.get("c", "b"), is(of("a2")));
 
         InOrder inOrder = inOrder(mockedCommitLog);
         inOrder.verify(mockedCommitLog, times(1)).exists();
-        inOrder.verify(mockedCommitLog, times(1)).commit(argThat(rowMutationMatcher(newAddMutation("a", "b", "c"))));
-        inOrder.verify(mockedCommitLog, times(1)).commit(argThat(rowMutationMatcher(newAddMutation("c", "b", "a"))));
+        inOrder.verify(mockedCommitLog, times(1)).commit(argThat(rowMutationMatcher(newAddMutation("a", "b", "c1"))));
+        inOrder.verify(mockedCommitLog, times(1)).commit(argThat(rowMutationMatcher(newAddMutation("c", "b", "a1"))));
+        inOrder.verify(mockedCommitLog, times(1)).commit(argThat(rowMutationMatcher(newAddMutation("a", "b", "c2"))));
+        inOrder.verify(mockedCommitLog, times(1)).commit(argThat(rowMutationMatcher(newAddMutation("c", "b", "a2"))));
         verifyNoMoreInteractions(mockedCommitLog);
     }
+
+    @Test
+    public void shouldReturnLatestVersionOfRecord() throws Exception {
+        Tablet tablet = new Tablet("id", mockedTabletMetadataService);
+        tablet.apply(newAddMutation("a", "b", "c1"));
+        tablet.apply(newAddMutation("a", "b", "c2"));
+        tablet.apply(newAddMutation("a", "b", "c3"));
+        assertThat(tablet.size(), is(1));
+        assertThat(tablet.get("a", "b"), is(of("c3")));
+    }
+
+    @Test
+    public void shouldReturnLatestVersionOfRecordAfterFlushing() throws Exception {
+        Tablet tablet = new Tablet("id", mockedTabletMetadataService);
+        tablet.apply(newAddMutation("a", "b", "c1"));
+        tablet.apply(newAddMutation("a", "b", "c2"));
+        tablet.apply(newAddMutation("a", "b", "c3"));
+        tablet.apply(newAddMutation("a", "b", "c4"));
+        tablet.apply(newAddMutation("a", "b", "c5"));
+        tablet.apply(newAddMutation("a", "b", "c6"));
+        tablet.flush();
+        assertThat(tablet.get("a", "b"), is(of("c6")));
+    }
+
+    @Test
+    public void shouldFlushMax3Versions() throws Exception {
+        //TODO: need to get a thing that gets all versions for a key
+        Tablet tablet = new Tablet("id", mockedTabletMetadataService);
+        tablet.apply(newAddMutation("a", "b", "c1"));
+        tablet.apply(newAddMutation("a", "b", "c2"));
+        tablet.apply(newAddMutation("a", "b", "c3"));
+        tablet.apply(newAddMutation("a", "b", "c4"));
+        tablet.apply(newAddMutation("a", "b", "c5"));
+        tablet.apply(newAddMutation("a", "b", "c6"));
+        tablet.flush();
+        assertThat(tablet.get("a", "b"), is(of("c6")));
+    }
+
 
     @Test
     public void shouldReturnEmptyForRecordNotFound() throws Exception {
