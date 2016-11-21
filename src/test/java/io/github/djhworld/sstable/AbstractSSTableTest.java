@@ -13,10 +13,13 @@ import static io.github.djhworld.model.RowMutation.newAddMutation;
 public class AbstractSSTableTest {
     static List<RowMutation> MUTATIONS;
     static File TEMP_FILE;
+    static File EMPTY_FILE;
 
     static void init() throws IOException {
         TEMP_FILE = File.createTempFile("" + System.currentTimeMillis(), ".db");
         TEMP_FILE.deleteOnExit();
+        EMPTY_FILE = File.createTempFile("empty" + System.currentTimeMillis(), ".db");
+        EMPTY_FILE.deleteOnExit();
 
         MUTATIONS = newArrayList();
         MUTATIONS.add(newAddMutation("com.amazon", "anchor:four", "testing3"));
@@ -36,6 +39,12 @@ public class AbstractSSTableTest {
             for (RowMutation mutation : MUTATIONS) {
                 ssTableWriter.write(mutation.rowKey, mutation.columnKey, mutation.value, mutation.timestamp);
             }
+        }
+    }
+
+    static void writeEmptySSTable() throws IOException {
+        FileSink sink = new FileSink(EMPTY_FILE.toPath());
+        try (SSTableWriter ssTableWriter = new SSTableWriter(sink)) {
         }
     }
 }

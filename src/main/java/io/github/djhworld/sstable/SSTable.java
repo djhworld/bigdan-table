@@ -1,7 +1,9 @@
 package io.github.djhworld.sstable;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import io.github.djhworld.exception.SSTableException;
 import io.github.djhworld.io.Source;
@@ -10,8 +12,8 @@ import org.slf4j.Logger;
 
 import java.io.*;
 import java.util.*;
-import java.util.function.Consumer;
-import java.util.regex.Matcher;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -21,7 +23,7 @@ import static io.github.djhworld.model.RowMutation.newAddMutation;
 import static io.github.djhworld.sstable.SSTable.Header.HEADER_LENGTH;
 import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
-import static java.util.regex.Pattern.compile;
+import static java.util.Spliterators.spliteratorUnknownSize;
 import static org.slf4j.LoggerFactory.getLogger;
 
 public class SSTable {
@@ -32,9 +34,6 @@ public class SSTable {
     private final Header header;
     private final Footer footer;
     private final Block[] blocks;
-
-    public final String minKey;
-    public final String maxKey;
 
     public SSTable(Source source) {
         LOGGER.info("Initialising SSTable at " + source.getLocation());
@@ -47,8 +46,6 @@ public class SSTable {
                 throw new SSTableException("Number of blocks do not match in header and footer");
 
             this.blocks = new ReadOnlyBlock[header.noOfBlocks];
-            this.minKey = this.footer.keysToBlockEntries.rowMap().firstKey();
-            this.maxKey = this.footer.keysToBlockEntries.rowMap().lastKey();
         } catch (Exception e) {
             throw new SSTableException("Exception caught attempting to initialise SSTable", e);
         }
@@ -71,43 +68,18 @@ public class SSTable {
         return ofNullable(getValueFromBlock(blockEntryDescriptors.get(0)));
     }
 
-    public void scanRow(String rowKey, String columnFamily, String columnKeyRegex, Consumer<RowMutation> consumer) {
-        SortedMap<String, List<BlockEntryDescriptor>> row = this.footer.keysToBlockEntries.row(rowKey);
-
-        if (row == null)
-            return;
-
-        boolean columnFamilyFound = false;
-        for (Map.Entry<String, List<BlockEntryDescriptor>> entry : row.entrySet()) {
-            if (entry.getKey().startsWith(columnFamily)) {
-                columnFamilyFound = true;
-                Matcher matcher = compile(columnFamily + ":" + columnKeyRegex).matcher(entry.getKey());
-                if (matcher.matches()) {
-                    for(BlockEntryDescriptor entryVersion : entry.getValue()) {
-                        String value = getValueFromBlock(entryVersion);
-                        consumer.accept(newAddMutation(rowKey, entry.getKey(), value, entryVersion.timestamp));
-                    }
-                }
-            }
-
-            if (columnFamilyFound && !entry.getKey().startsWith(columnFamily))
-                break;
-        }
+    public Stream<RowMutation> stream() {
+        this.loadAllBlocks();
+        Iterator<RowMutation> scanIterator = createScanIterator();
+        return StreamSupport.stream(spliteratorUnknownSize(scanIterator, Spliterator.SUBSIZED), false);
     }
 
-    public void scan(Consumer<RowMutation> consumer) {
-        this.loadAllBlocks();
-        this.footer.keysToBlockEntries.cellSet().forEach((cell) -> {
-            for (BlockEntryDescriptor blockEntryDescriptor : cell.getValue()) {
-                String value = getValueFromBlock(blockEntryDescriptor);
-                consumer.accept(
-                        newAddMutation(
-                                cell.getRowKey(),
-                                cell.getColumnKey(),
-                                value,
-                                blockEntryDescriptor.timestamp));
-            }
-        });
+    public Stream<RowMutation> stream(String rowKey) {
+        return scanRowFor(rowKey, "");
+    }
+
+    public Stream<RowMutation> stream(String rowKey, String columnFamily) {
+        return scanRowFor(rowKey, columnFamily + ":");
     }
 
     public long cachedBlocks() {
@@ -129,6 +101,108 @@ public class SSTable {
 
     public int noOfRows() {
         return this.footer.keysToBlockEntries.size();
+    }
+
+    private Stream<RowMutation> scanRowFor(String rowKey, String columnFamily) {
+        SortedMap<String, List<BlockEntryDescriptor>> row = this.footer.keysToBlockEntries.row(rowKey);
+
+        if (row == null)
+            return Stream.empty();
+
+        Iterator<RowMutation> rowMutationIterator = createRowColumnFamilyIterator(rowKey, columnFamily, row);
+        return StreamSupport.stream(spliteratorUnknownSize(rowMutationIterator, Spliterator.SUBSIZED), false);
+    }
+
+    private Iterator<RowMutation> createScanIterator() {
+        return new Iterator<RowMutation>() {
+            private Iterator<Table.Cell<String, String, List<BlockEntryDescriptor>>> cellIterator = footer.keysToBlockEntries.cellSet().iterator();
+            private Iterator<BlockEntryDescriptor> valueVersionIterator;
+            private Table.Cell<String, String, List<BlockEntryDescriptor>> currentCell;
+            private BlockEntryDescriptor currentValueVersion;
+
+            @Override
+            public boolean hasNext() {
+                if (!cellIterator.hasNext())
+                    return false;
+
+                if (valueVersionIterator == null || !valueVersionIterator.hasNext()) {
+                    currentCell = cellIterator.next();
+                    valueVersionIterator = currentCell.getValue().iterator();
+                    currentValueVersion = valueVersionIterator.next();
+                } else if (valueVersionIterator.hasNext()) {
+                    currentValueVersion = valueVersionIterator.next();
+                }
+
+                return true;
+            }
+
+            @Override
+            public RowMutation next() {
+                String value = getValueFromBlock(currentValueVersion);
+                return newAddMutation(
+                                currentCell.getRowKey(),
+                                currentCell.getColumnKey(),
+                                value,
+                                currentValueVersion.timestamp
+                );
+            }
+        };
+    }
+
+    private Iterator<RowMutation> createRowColumnFamilyIterator(final String rowKey,
+                                                                final String columnFamily,
+                                                                final SortedMap<String, List<BlockEntryDescriptor>> row) {
+        Preconditions.checkNotNull(row);
+
+        return new Iterator<RowMutation>() {
+            private boolean columnFamilyFound = false;
+            private Iterator<Map.Entry<String, List<BlockEntryDescriptor>>> columnsIterator = row.entrySet().iterator();
+            private Iterator<BlockEntryDescriptor> valueVersionIterator;
+            private Map.Entry<String, List<BlockEntryDescriptor>> currentColumn;
+            private BlockEntryDescriptor currentValueVersion;
+
+            @Override
+            public boolean hasNext() {
+                if (!columnsIterator.hasNext())
+                    return false;
+
+                moveForward();
+
+                // column family out of scope so we can quit
+                if (columnFamilyFound && !currentColumn.getKey().startsWith(columnFamily))
+                    return false;
+
+                //skip until column family found
+                while (!columnFamilyFound && columnsIterator.hasNext()) {
+                    if (currentColumn.getKey().startsWith(columnFamily))
+                        columnFamilyFound = true;
+                    else
+                        moveForward();
+                }
+
+                return columnFamilyFound;
+            }
+
+            private void moveForward() {
+                if (valueVersionIterator == null || !valueVersionIterator.hasNext()) {
+                    currentColumn = columnsIterator.next();
+                    valueVersionIterator = currentColumn.getValue().iterator();
+                    currentValueVersion = valueVersionIterator.next();
+                } else if (valueVersionIterator.hasNext()) {
+                    currentValueVersion = valueVersionIterator.next();
+                }
+            }
+
+            @Override
+            public RowMutation next() {
+                String value = getValueFromBlock(currentValueVersion);
+                return newAddMutation(
+                        rowKey,
+                        currentColumn.getKey(),
+                        value,
+                        currentValueVersion.timestamp);
+            }
+        };
     }
 
     private Footer newFooter() throws IOException {

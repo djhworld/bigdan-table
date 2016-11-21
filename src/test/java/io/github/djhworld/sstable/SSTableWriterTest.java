@@ -32,7 +32,7 @@ public class SSTableWriterTest extends AbstractSSTableTest {
         });
 
         AtomicInteger counter = new AtomicInteger(0);
-        ssTable.scan((rm) -> {
+        ssTable.stream().forEach((rm) -> {
             RowMutation mutation = MUTATIONS.get(counter.getAndIncrement());
             assertThat(rm.rowKey, is(mutation.rowKey));
             assertThat(rm.columnKey, is(mutation.columnKey));

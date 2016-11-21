@@ -151,7 +151,7 @@ public class Tablet {
                     TreeBasedTable<String, String, Stack<RowMutation>> tempTable = create();
                     for (SSTable ssTable : ssTables) {
                         Stopwatch stopwatch = Stopwatch.createStarted();
-                        ssTable.scan(rm -> {
+                        ssTable.stream().forEach(rm -> {
                             if (TOMBSTONE.equals(rm.value)) {
                                 tempTable.remove(rm.rowKey, rm.columnKey);
                             } else {

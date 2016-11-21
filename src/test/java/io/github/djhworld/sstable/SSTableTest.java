@@ -1,16 +1,20 @@
 package io.github.djhworld.sstable;
 
-import com.google.common.collect.MinMaxPriorityQueue;
 import io.github.djhworld.exception.SSTableException;
 import io.github.djhworld.io.FileSource;
+import io.github.djhworld.model.RowMutation;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.google.common.io.Resources.getResource;
 import static java.nio.file.Paths.get;
@@ -24,12 +28,15 @@ import static org.junit.runners.MethodSorters.NAME_ASCENDING;
 public class SSTableTest extends AbstractSSTableTest {
     static final int NO_OF_ITEMS = 9996;
     private static SSTable SS_TABLE;
+    private static SSTable EMPTY_SS_TABLE;
 
     @BeforeClass
     public static void beforeClass() throws IOException {
         init();
         writeSSTable();
+        writeEmptySSTable();
         SS_TABLE = new SSTable(new FileSource(TEMP_FILE.toPath()));
+        EMPTY_SS_TABLE = new SSTable(new FileSource(EMPTY_FILE.toPath()));
     }
 
     @Test
@@ -75,6 +82,7 @@ public class SSTableTest extends AbstractSSTableTest {
     @Test
     public void shouldGetCorrectNumberOfBlocks() throws Exception {
         assertThat(SS_TABLE.blocks(), is(3));
+        assertThat(EMPTY_SS_TABLE.blocks(), is(1));
     }
 
     @Test
@@ -96,10 +104,45 @@ public class SSTableTest extends AbstractSSTableTest {
     }
 
     @Test
-    public void shouldScanRow() throws Exception {
-        SS_TABLE.scanRow("com.amazon", "data", ".*", rm -> {
-            System.out.println(rm.rowKey + " -> " + rm.columnKey + " -> " + rm.value);
-        });
+    public void shouldScanAllColumnsForRow() throws Exception {
+        Stream<RowMutation> stream = SS_TABLE.stream("com.amazon");
+        assertThat(stream.count(), is(NO_OF_ITEMS + 4L));
+    }
+
+    @Test
+    public void shouldReturnEmptyStreamWhenScanningRowThatDoesNotExist() throws Exception {
+        Stream<RowMutation> stream = SS_TABLE.stream("foo");
+        assertThat(stream.count(), is(0L));
+    }
+
+    @Test
+    public void shouldReturnEmptyStreamWhenScanningRowOnEmptySSTable() throws Exception {
+        Stream<RowMutation> stream = EMPTY_SS_TABLE.stream("com.amazon");
+        assertThat(stream.count(), is(0L));
+    }
+
+    @Test
+    public void shouldOnlyScanRowsForColumnFamily() throws Exception {
+        Stream<RowMutation> stream = SS_TABLE.stream("com.amazon", "page");
+        List<RowMutation> actual = stream.collect(Collectors.toList());
+
+        assertThat(actual.size(), is(NO_OF_ITEMS));
+        for (int i = 0; i < NO_OF_ITEMS; i++) {
+            assertThat(actual.get(i).rowKey, is("com.amazon"));
+            assertThat(actual.get(i).columnKey, is("page:" + String.format("%05d", i) + "column"));
+            assertThat(actual.get(i).value, is("value" + i));
+        }
+    }
+
+    @Test
+    public void shouldReturnEmptyStreamWhenScanningRowForColumnFamilyThatDoesNotExist() throws Exception {
+        Stream<RowMutation> stream = SS_TABLE.stream("com.amazon", "da");
+        assertThat(stream.count(), is(0L));
+    }
+
+    @Test
+    public void shouldReturnEmptyStreamWhenScanningEmptyTable() throws Exception {
+        assertThat(EMPTY_SS_TABLE.stream().count(), is(0L));
     }
 
     @Test
@@ -109,7 +152,7 @@ public class SSTableTest extends AbstractSSTableTest {
         assertThat(SS_TABLE.cachedBlocks(), is(0L));
 
         AtomicInteger i = new AtomicInteger(-4);
-        SS_TABLE.scan(rm -> {
+        SS_TABLE.stream().forEach(rm -> {
             assertThat(SS_TABLE.cachedBlocks(), is(3L));
             switch (i.get()) {
                 case -4:
