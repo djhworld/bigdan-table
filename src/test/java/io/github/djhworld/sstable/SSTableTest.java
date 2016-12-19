@@ -2,6 +2,7 @@ package io.github.djhworld.sstable;
 
 import io.github.djhworld.exception.SSTableException;
 import io.github.djhworld.io.FileSource;
+import io.github.djhworld.io.GzipCompressor;
 import io.github.djhworld.model.RowMutation;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -97,6 +98,7 @@ public class SSTableTest extends AbstractSSTableTest {
         new SSTable(new FileSource(path));
     }
 
+    //TODO: these tests are wrong
     @Test(expected = SSTableException.class)
     public void shouldFailToLoadSSTableIfHasCorruptedFooter() throws Exception {
         Path path = get(getResource("invalid-footer.db").toURI());

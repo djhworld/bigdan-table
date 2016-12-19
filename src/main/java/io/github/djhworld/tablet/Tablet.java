@@ -124,9 +124,7 @@ public class Tablet {
                 Path filename = createSSTable(oldMemTable, currentTabletGeneration);
 
                 this.ssTables.add(
-                        new SSTable(
-                                tabletStore.get(currentTabletGeneration, filename)
-                        )
+                        new SSTable(tabletStore.get(currentTabletGeneration, filename))
                 );
 
                 this.memTable.clear();
@@ -256,7 +254,9 @@ public class Tablet {
         Stack<SSTable> ssTablesStack = new Stack<>();
 
         for (Path ssTablePath : ssTablePaths) {
-            ssTablesStack.push(new SSTable(tabletStore.get(currentGeneration, ssTablePath)));
+            ssTablesStack.push(new SSTable(
+                    tabletStore.get(currentGeneration, ssTablePath)
+            ));
         }
 
         ssTables.clear();
@@ -268,7 +268,7 @@ public class Tablet {
         LOGGER.info("Creating SSTable at path " + filename);
 
 
-        try (SSTableWriter ssTableWriter = new SSTableWriter(tabletStore.newSink(tabletGeneration, filename))) {
+        try (SSTableWriter ssTableWriter = new SSTableWriter(tabletStore.newSink(tabletGeneration, filename), metadataService.getCompressionCodecFor(tabletId))) {
             for (Table.Cell<String, String, Stack<RowMutation>> cell : data.cellSet()) {
                 Stack<RowMutation> mutationVersions = cell.getValue();
                 int versionsCount = 0;
