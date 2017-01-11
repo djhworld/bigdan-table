@@ -32,8 +32,8 @@ Concepts worked on:
 ![Alt text](/sstable.png?raw=true "SSTable")
 
 Blocks are of fixed length and block size is stored in the header.
-All blocks are compressed using GZIP.
-Footer is compressed using GZIP.
+All blocks are compressed using a defined compression algorithm.
+Footer is compressed using a defined compression algorithm.
 
 Reader will
 
