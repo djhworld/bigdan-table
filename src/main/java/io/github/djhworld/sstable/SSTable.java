@@ -6,9 +6,9 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import io.github.djhworld.exception.SSTableException;
-import io.github.djhworld.io.CompressionCodec;
-import io.github.djhworld.io.Compressor;
-import io.github.djhworld.io.CompressorFactory;
+import io.github.djhworld.io.CompressionType;
+import io.github.djhworld.io.CompressionStrategy;
+import io.github.djhworld.io.CompressionStrategyFactory;
 import io.github.djhworld.io.Source;
 import io.github.djhworld.model.RowMutation;
 import org.slf4j.Logger;
@@ -20,7 +20,7 @@ import java.util.stream.StreamSupport;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.TreeBasedTable.create;
-import static io.github.djhworld.io.CompressionCodec.*;
+import static io.github.djhworld.io.CompressionType.*;
 import static io.github.djhworld.model.RowMutation.newAddMutation;
 import static io.github.djhworld.sstable.SSTable.Header.HEADER_LENGTH;
 import static java.util.Optional.empty;
@@ -36,14 +36,14 @@ public class SSTable {
     private final Header header;
     private final Footer footer;
     private final Block[] blocks;
-    private final Compressor compressor;
+    private final CompressionStrategy compressionStrategy;
 
     public SSTable(Source source) {
         LOGGER.info("Initialising SSTable at " + source.getLocation());
         try {
             this.source = source;
             this.header = new Header(this.source);
-            this.compressor = CompressorFactory.create(header.compressionCodec);
+            this.compressionStrategy = CompressionStrategyFactory.create(header.compressionType);
             this.footer = newFooter();
 
             if (header.noOfBlocks != this.footer.blockDescriptors.size())
@@ -105,6 +105,10 @@ public class SSTable {
 
     public int noOfRows() {
         return this.footer.keysToBlockEntries.size();
+    }
+
+    public CompressionType compressionCodec() {
+        return this.header.compressionType;
     }
 
     private Stream<RowMutation> scanRowFor(String rowKey, String columnFamily) {
@@ -214,7 +218,7 @@ public class SSTable {
         int footerOffset = this.header.fileLength - footerCompressedLength;
         return new Footer(
                 this.source,
-                this.compressor,
+                this.compressionStrategy,
                 footerOffset,
                 footerCompressedLength,
                 this.header.footerUncompressedLength
@@ -240,7 +244,7 @@ public class SSTable {
     private Block loadBlock(int blockId) throws IOException {
         BlockDescriptor blockDescriptor = this.footer.getBlockDescriptor(blockId);
 
-        try (DataInputStream inputStream = new DataInputStream(compressor.newCompressedInputStream(source.getRange(blockDescriptor.offset, blockDescriptor.length)))) {
+        try (DataInputStream inputStream = new DataInputStream(compressionStrategy.newInputStream(source.getRange(blockDescriptor.offset, blockDescriptor.length)))) {
             byte[] block = new byte[this.blockSize()];
             inputStream.readFully(block);
             return new ReadOnlyBlock(block);
@@ -262,7 +266,7 @@ public class SSTable {
             for (BlockDescriptor blockDescriptor : this.footer.blockDescriptors) {
                 if (blocks[blockNo] == null) {
                     DataInputStream dis = new DataInputStream(
-                            compressor.newCompressedInputStream(
+                            compressionStrategy.newInputStream(
                                     new ByteArrayInputStream(
                                             allBlocks,
                                             blockDescriptor.offset - HEADER_LENGTH,
@@ -284,7 +288,7 @@ public class SSTable {
         static final int HEADER_LENGTH = 29;
         final int magic;
         final int version;
-        final CompressionCodec compressionCodec;
+        final CompressionType compressionType;
         final int footerOffset;
         final int footerUncompressedLength;
         final int fileLength;
@@ -300,7 +304,7 @@ public class SSTable {
                     throw new SSTableException("Header does not conform to specification");
 
                 this.version = dis.readInt();
-                this.compressionCodec = valueOf(dis.readByte());
+                this.compressionType = valueOf(dis.readByte());
                 this.noOfBlocks = dis.readInt();
                 this.blockSize = dis.readInt();
                 this.footerOffset = dis.readInt();
@@ -309,10 +313,10 @@ public class SSTable {
             }
         }
 
-        Header(int version, CompressionCodec compressionCodec, int noOfBlocks, int blockSize, int footerOffset, int footerUncompressedLength, int fileLength) {
+        Header(int version, CompressionType compressionType, int noOfBlocks, int blockSize, int footerOffset, int footerUncompressedLength, int fileLength) {
             this.magic = MAGIC;
             this.version = version;
-            this.compressionCodec = compressionCodec;
+            this.compressionType = compressionType;
             this.noOfBlocks = noOfBlocks;
             this.blockSize = blockSize;
             this.footerOffset = footerOffset;
@@ -328,7 +332,7 @@ public class SSTable {
             try {
                 dos.writeInt(this.magic);
                 dos.writeInt(this.version);
-                dos.writeByte(this.compressionCodec.getId());
+                dos.writeByte(this.compressionType.getId());
                 dos.writeInt(this.noOfBlocks);
                 dos.writeInt(this.blockSize);
                 dos.writeInt(this.footerOffset);
@@ -349,18 +353,18 @@ public class SSTable {
         private static final Joiner ENTRY_ROW_KEY_JOINER = Joiner.on(ENTRY_ROW_KEY_SEPARATOR);
         private final List<BlockDescriptor> blockDescriptors;
         private final TreeBasedTable<String, String, List<BlockEntryDescriptor>> keysToBlockEntries;
-        private final Compressor compressor;
+        private final CompressionStrategy compressionStrategy;
 
-        Footer(Compressor compressor) {
-            this.compressor = compressor;
+        Footer(CompressionStrategy compressionStrategy) {
+            this.compressionStrategy = compressionStrategy;
             this.blockDescriptors = newArrayList();
             this.keysToBlockEntries = create();
         }
 
 
-        private Footer(Source source, Compressor compressor, int footerOffset, int compressedLength, int uncompressedLength) throws IOException, SSTableException {
-            this(compressor);
-            try (DataInputStream inputStream = new DataInputStream(compressor.newCompressedInputStream(source.getRange(footerOffset, compressedLength)))) {
+        private Footer(Source source, CompressionStrategy compressionStrategy, int footerOffset, int compressedLength, int uncompressedLength) throws IOException, SSTableException {
+            this(compressionStrategy);
+            try (DataInputStream inputStream = new DataInputStream(compressionStrategy.newInputStream(source.getRange(footerOffset, compressedLength)))) {
                 LOGGER.info("Initialising SSTable footer at offset " + footerOffset);
                 int currentPos = 0;
                 currentPos += loadBlockDescriptors(inputStream);
@@ -421,7 +425,7 @@ public class SSTable {
          * @throws SSTableException
          */
         int writeTo(OutputStream out) {
-            try (DataOutputStream compressedOut = new DataOutputStream(compressor.newCompressedOutputStream(out))) {
+            try (DataOutputStream compressedOut = new DataOutputStream(compressionStrategy.newOutputStream(out))) {
                 writeBlockDescriptors(compressedOut);
                 writeBlockEntries(compressedOut);
                 return compressedOut.size();

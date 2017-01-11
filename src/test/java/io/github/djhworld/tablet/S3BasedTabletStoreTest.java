@@ -10,6 +10,9 @@ import org.mockito.Mock;
 import java.nio.file.Paths;
 import java.util.Optional;
 
+import static io.github.djhworld.io.CompressionType.GZIP;
+import static io.github.djhworld.io.CompressionType.SNAPPY;
+import static io.github.djhworld.io.CompressionType.UNCOMPRESSED;
 import static io.github.djhworld.model.RowMutation.newAddMutation;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
@@ -39,19 +42,20 @@ public class S3BasedTabletStoreTest {
         when(mockedTabletMetadataService.getTabletStore(eq("id"))).thenReturn(tabletStore);
         when(mockedTabletMetadataService.getCurrentTabletGeneration(eq("id"))).thenReturn(1);
         when(mockedTabletMetadataService.getCurrentCommitLog(eq("id"))).thenReturn(mockedCommitLog);
+        when(mockedTabletMetadataService.getCompressionCodecFor(eq("id"))).thenReturn(GZIP);
 
 
         Tablet tablet = new Tablet("id", mockedTabletMetadataService);
 
         for (int j = 0; j < 4; j++) {
-            for (int i = 0; i < 1234; i++) {
+            for (int i = 0; i < 123456; i++) {
                 tablet.apply(newAddMutation("com.amazon", String.format("%05d", i) + "site", "data data data data dara data data data" + i));
             }
             tablet.flush();
         }
         when(mockedTabletMetadataService.getCurrentTabletGeneration(eq("id"))).thenReturn(1).thenReturn(2);
         tablet.compact();
-        for (int i = 0; i < 1234; i++) {
+        for (int i = 0; i < 123456; i++) {
             assertThat(tablet.get("com.amazon", String.format("%05d", i) + "site"), is(Optional.of("data data data data dara data data data" + i)));
         }
     }

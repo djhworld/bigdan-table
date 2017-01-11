@@ -2,9 +2,7 @@ package io.github.djhworld.sstable;
 
 import io.github.djhworld.exception.SSTableException;
 import io.github.djhworld.io.FileSource;
-import io.github.djhworld.io.GzipCompressor;
 import io.github.djhworld.model.RowMutation;
-import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -18,6 +16,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.io.Resources.getResource;
+import static io.github.djhworld.io.CompressionType.*;
 import static java.nio.file.Paths.get;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
@@ -145,6 +144,11 @@ public class SSTableTest extends AbstractSSTableTest {
     @Test
     public void shouldReturnEmptyStreamWhenScanningEmptyTable() throws Exception {
         assertThat(EMPTY_SS_TABLE.stream().count(), is(0L));
+    }
+
+    @Test
+    public void shouldReturnCorrectCompressionCodec() throws Exception {
+        assertThat(SS_TABLE.compressionCodec(), is(SNAPPY));
     }
 
     @Test

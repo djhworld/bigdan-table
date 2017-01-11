@@ -7,21 +7,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import static io.github.djhworld.io.CompressionCodec.*;
+import static io.github.djhworld.io.CompressionType.*;
 
-public class SnappyCompressor implements Compressor {
+public class Snappy implements CompressionStrategy {
     @Override
-    public InputStream newCompressedInputStream(InputStream inputStream) throws IOException {
+    public InputStream newInputStream(InputStream inputStream) throws IOException {
         return new SnappyInputStream(inputStream);
     }
 
     @Override
-    public CompressedOutputStream newCompressedOutputStream(OutputStream outputStream) throws IOException {
+    public CompressedOutputStream newOutputStream(OutputStream outputStream) throws IOException {
         return new SnappyCompressedOutputStream(outputStream);
     }
 
     @Override
-    public CompressionCodec getCodec() {
+    public CompressionType getCompressionType() {
         return SNAPPY;
     }
 

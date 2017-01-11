@@ -19,6 +19,7 @@ Concepts worked on:
   * :white_check_mark: Blocks compressed with GZIP
   * :white_check_mark: Footer compressed with GZIP
   * :white_check_mark: Configurable block size
+  * :white_check_mark: Configurable compression (GZIP, SNAPPY, Uncompressed supported)
   * :white_check_mark: Storage agnostic
 
 * TabletServer

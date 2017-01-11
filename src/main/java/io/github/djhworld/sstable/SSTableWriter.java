@@ -17,25 +17,25 @@ public class SSTableWriter implements Closeable {
     private final RewindableByteArrayOutputStream rbaos;
     private final SSTable.Footer footer;
     private final Sink sink;
-    private final Compressor compressor;
+    private final CompressionStrategy compressionStrategy;
     private final int blockSize;
 
     private int currentBlockNo;
     private WriteableBlock currentBlock;
 
-    public SSTableWriter(Sink sink, CompressionCodec compressionCodec) throws IOException {
-        this(sink, compressionCodec, DEFAULT_BLOCK_SIZE);
+    public SSTableWriter(Sink sink, CompressionType compressionType) throws IOException {
+        this(sink, compressionType, DEFAULT_BLOCK_SIZE);
     }
 
-    public SSTableWriter(Sink sink, CompressionCodec compressionCodec, int blockSize) throws IOException {
+    public SSTableWriter(Sink sink, CompressionType compressionType, int blockSize) throws IOException {
         this.sink = sink;
-        this.compressor = CompressorFactory.create(compressionCodec);
+        this.compressionStrategy = CompressionStrategyFactory.create(compressionType);
         this.blockSize = blockSize;
         this.rbaos = new RewindableByteArrayOutputStream();
         this.dos = new DataOutputStream(rbaos);
         this.currentBlockNo = 0;
         this.currentBlock = newBlock();
-        this.footer = new Footer(this.compressor);
+        this.footer = new Footer(this.compressionStrategy);
         writeDummyHeader(dos);
     }
 
@@ -66,7 +66,7 @@ public class SSTableWriter implements Closeable {
 
         Header header = new Header(
                 VERSION,
-                compressor.getCodec(),
+                compressionStrategy.getCompressionType(),
                 currentBlockNo,
                 this.blockSize,
                 footerStartOffset,
@@ -94,7 +94,7 @@ public class SSTableWriter implements Closeable {
     private void flushCurrentBlock() throws IOException {
         int blockStart = getNoOfBytesWritten();
 
-        CompressedOutputStream compressedOutputStream = compressor.newCompressedOutputStream(dos);
+        CompressedOutputStream compressedOutputStream = compressionStrategy.newOutputStream(dos);
         currentBlock.flushTo(compressedOutputStream);
         compressedOutputStream.finish();
 

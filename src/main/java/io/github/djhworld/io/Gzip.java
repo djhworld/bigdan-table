@@ -6,21 +6,21 @@ import java.io.OutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-import static io.github.djhworld.io.CompressionCodec.*;
+import static io.github.djhworld.io.CompressionType.*;
 
-public class GzipCompressor implements Compressor {
+public class Gzip implements CompressionStrategy {
     @Override
-    public CompressedOutputStream newCompressedOutputStream(OutputStream outputStream) throws IOException {
+    public CompressedOutputStream newOutputStream(OutputStream outputStream) throws IOException {
         return new GzipCompressedOutputStream(outputStream);
     }
 
     @Override
-    public InputStream newCompressedInputStream(InputStream inputStream) throws IOException {
+    public InputStream newInputStream(InputStream inputStream) throws IOException {
         return new GZIPInputStream(inputStream);
     }
 
     @Override
-    public CompressionCodec getCodec() {
+    public CompressionType getCompressionType() {
         return GZIP;
     }
 

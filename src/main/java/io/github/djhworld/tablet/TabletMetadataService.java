@@ -1,19 +1,15 @@
 package io.github.djhworld.tablet;
 
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
-import io.github.djhworld.io.CompressionCodec;
-import io.github.djhworld.io.Compressor;
-import io.github.djhworld.io.GzipCompressor;
+import io.github.djhworld.io.CompressionType;
 import io.github.djhworld.log.CommitLog;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
-import static io.github.djhworld.io.CompressionCodec.*;
+import static io.github.djhworld.io.CompressionType.*;
 import static java.nio.file.Paths.get;
 
 //TODO:....
@@ -52,8 +48,8 @@ public class TabletMetadataService {
         return new S3BasedTabletStore(new AmazonS3Client(), Paths.get("djhworld", "sstables", tabletId));
     }
 
-    public CompressionCodec getCompressionCodecFor(String tabletId) throws IOException {
+    public CompressionType getCompressionCodecFor(String tabletId) throws IOException {
         //TODO!!
-        return GZIP;
+        return SNAPPY;
     }
 }
